@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  name          String    @db.VarChar(255)
+  initials      String    @db.VarChar(10)
+  email         String?   @unique @db.VarChar(255)
+  notifications Boolean   @default(true)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  password      String?   @db.VarChar(255)
+  loginWithGoogle Boolean @default(false) @map("login_wih_google")
+  anonymous     Boolean   @default(false)
+  role          UserRole  @default(USER)
+  securityCode  String?   @db.VarChar(255) @map("security_code")
+  securityCodeExpiresAt DateTime? @map("security_code_expires_at")
+  state       UserState   @default(ACTIVE) @map("state")
+
+  members       Member[]
+  sessions      Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id          String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  deviceId    String      @db.VarChar(255)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  loggedOutAt DateTime?   @map("logged_out_at")
+  deviceType  DeviceType  @map("device_type")
+  userId      String      @map("user_id") @db.Uuid
+  state       SessionState @default(ACTIVE) @map("state")
+
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@map("sessions")
+}
+
+model Group {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  name        String    @db.VarChar(255)
+  description String?   @db.VarChar(255)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  splitType   SplitType @map("split_type")
+
+  members     Member[]
+  categories  Category[]
+  expenses    Expense[]
+
+  @@map("groups")
+}
+
+model Member {
+  id            String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId        String        @map("user_id") @db.Uuid
+  groupId       String        @map("group_id") @db.Uuid
+  invitedById   String?       @map("invited_by") @db.Uuid
+  role          MemberRole[]  @default([MEMBER])
+  createdAt     DateTime      @default(now()) @map("created_at")
+  notifications Boolean?      @default(true)
+  defaultSplit  Float?        @map("default_split") @db.DoublePrecision
+  state         MemberState   @default(ACTIVE)
+  code          String?       @db.VarChar(255) @unique
+
+  invitations   Member[]      @relation("MemberInvitations")
+  user          User          @relation(fields: [userId], references: [id])
+  group         Group         @relation(fields: [groupId], references: [id])
+  invitedBy     Member?       @relation("MemberInvitations", fields: [invitedById], references: [id])
+  payments      Payment[]
+  splits        Split[]
+
+
+  @@map("members")
+}
+
+model Expense {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  categoryId  String   @map("category_id") @db.Uuid
+  groupId     String   @map("group_id") @db.Uuid
+  title       String   @db.VarChar(255)
+  amount      Float    @db.DoublePrecision
+  description String?  @db.VarChar(255)
+  imageUri    String?  @map("image_uri") @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at")
+  date        DateTime
+
+  category Category  @relation(fields: [categoryId], references: [id])
+  group    Group     @relation(fields: [groupId], references: [id])
+  payments Payment[]
+  splits   Split[]
+
+  @@map("expenses")
+}
+
+model Payment {
+  id        String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  memberId  String  @map("member_id") @db.Uuid
+  expenseId String? @map("expense_id") @db.Uuid
+  amount    Float   @db.DoublePrecision
+
+  member  Member   @relation(fields: [memberId], references: [id])
+  expense Expense? @relation(fields: [expenseId], references: [id])
+
+  @@map("payments")
+}
+
+model Split {
+  id        String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  memberId  String  @map("member_id") @db.Uuid
+  expenseId String  @map("expense_id") @db.Uuid
+  amount    Float   @db.DoublePrecision
+
+  member  Member  @relation(fields: [memberId], references: [id])
+  expense Expense @relation(fields: [expenseId], references: [id])
+
+  @@map("splits")
+}
+
+model Category {
+  id      String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  groupId String         @map("group_id") @db.Uuid
+  name    String         @db.VarChar(255)
+  icon    String         @db.VarChar(255)
+
+  group    Group     @relation(fields: [groupId], references: [id])
+  expenses Expense[]
+
+  @@map("categories")
+}
+
+enum SplitType {
+  EQUAL
+  PERCENTAGE
+}
+
+enum MemberRole {
+  ADMIN
+  CREATOR
+  MEMBER
+}
+
+enum MemberState {
+  ACTIVE
+  REMOVED
+  LEFT
+  PENDING
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum DeviceType {
+  ANDROID
+  IOS
+}
+
+enum SessionState {
+  ACTIVE
+  LOGGED_OUT
+}
+
+enum UserState {
+  EMAIL_CONFIRMATION_PENDING
+  ACTIVE
+}

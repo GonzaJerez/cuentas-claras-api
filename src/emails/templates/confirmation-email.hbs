@@ -1,0 +1,158 @@
+<html>
+  <style>
+    a {
+      text-decoration: none;
+    }
+    .greetings {
+      margin-top: 10%;
+    }
+    .action-table {
+      width: 100%;
+      max-width: 500px;
+      margin-top: 3rem;
+    }
+    .action-icon {
+      object-fit: contain;
+      width: 100%;
+      max-width: 4rem;
+    }
+    .action-button-text {
+      color: #fff;
+      margin: 0;
+      text-align: center;
+      padding: 1rem 0;
+    }
+    .action-description {
+      margin: 0;
+      margin-left: 25%;
+      width: 60%;
+    }
+    .footer {
+      background-color: #009c6d;
+      color: #fff;
+      padding: 1.5rem 1rem;
+      margin-top: 5rem;
+      text-align: center;
+    }
+  </style>
+  <body
+    style="
+         font-family: Arial, Helvetica, sans-serif;
+         text-align: left;
+         background-color: #fff;
+         max-width: 900px;
+         margin: 0 auto;
+      "
+  >
+    <!-- HEADER -->
+    <table style="margin: 0 auto; border: 0px; width: 100%; border-spacing: 0">
+      <tr>
+        <td>
+          <img
+            src="https://res.cloudinary.com/djnjh7f30/image/upload/v1690986473/brand/new_header.png"
+            alt=""
+            width="100%"
+          />
+        </td>
+      </tr>
+      <tr>
+        <td style="background: linear-gradient(to right, #009c6d 40%, #fff)">
+          <h3
+            style="
+                     color: #fff;
+                     text-align: start;
+                     padding: 1rem 0;
+                     padding-left: 2rem;
+                     letter-spacing: 1px;
+                     margin: 0 auto;
+                  "
+          >
+            CONFIRMACION DE EMAIL
+          </h3>
+        </td>
+      </tr>
+    </table>
+
+    <div style="padding: 0 5%">
+      <!-- SECURITY CODE -->
+      <div style="">
+        <div style="padding: 0 5%" class="greetings">
+          <h3>Hola {{name}}:</h3>
+          <h3 style="font-weight: 400">
+            Este es tu código de seguridad, recuerda no compartirlo con nadie:
+          </h3>
+        </div>
+
+        <div
+          style="
+                  background-color: #009c6d50;
+                  border-radius: 20px;
+                  padding: 2rem 0;
+                  text-align: center;
+               "
+        >
+          <h1 style="color: #004d35; margin: 0; letter-spacing: 2px;">
+            {{securityCode}}
+          </h1>
+        </div>
+      </div>
+
+      <div style="padding: 0 5%; margin-top: 1rem; text-align: center;">
+        <p style="color: #333;">
+          O haz click en el siguiente link:
+        </p>
+        <a
+          href="{{confirmationUrl}}"
+          target="_blank"
+          rel="noopener noreferrer"
+          style="color: #009c6d; word-break: break-all;"
+        >
+          Confirmar email
+        </a>
+      </div>
+
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="footer" style="font-size: 0.8rem">
+      <p style="font-weight: 300; margin: 0">
+        Seguinos en:
+        <img
+          src="https://res.cloudinary.com/djnjh7f30/image/upload/v1689541424/icons/facebook-icon.ico"
+          width="12px"
+        />
+
+        <img
+          src="https://res.cloudinary.com/djnjh7f30/image/upload/v1689541424/icons/youtube-icon.ico"
+          width="12px"
+        />
+
+        <img
+          src="https://res.cloudinary.com/djnjh7f30/image/upload/v1689541424/icons/instagram-icon.ico"
+          width="12px"
+        />
+        <b style="margin-left: 0.5rem"> GUM Argentina</b>
+      </p>
+
+      <p style="font-weight: 600; margin: 0; color: #fff">
+        <a
+          style="color: #fff"
+          href="SonrisaGUM.com.ar"
+          target="_blank"
+          rel="noopener noreferrer"
+        >SonrisaGUM.com.ar</a>
+        |
+        <span style="color: #fff">info.profesional@ar.sunstar.com</span>
+      </p>
+
+      <p style="margin: 0; margin-top: 2.5rem; font-weight: 300">
+        Encontrá nuestros productos en las farmacias y supermercados más
+        importantes del país.
+      </p>
+      <p style="margin: 0; font-weight: 300">
+        Si no nos encontrás, comunicate con nosotros al 0800-333-0238 o por
+        nuestras redes sociales para ayudarte.
+      </p>
+    </footer>
+  </body>
+</html>
