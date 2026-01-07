@@ -1,8 +1,15 @@
 import { PartialType } from "@nestjs/mapped-types";
 import { CreateGroupDto } from "./create-group.dto";
-import { IsArray, IsEnum, IsOptional, IsString } from "class-validator";
+import {
+  IsArray,
+  IsEnum,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from "class-validator";
 import { SplitType } from "prisma/generated/enums";
-import { UpdateMemberDto } from "src/members/dto/update-member.dto";
+import { UpdateMemberWithGroupDto } from "src/members/dto/update-member-with-group.dto";
+import { Type } from "class-transformer";
 
 export class UpdateGroupDto extends PartialType(CreateGroupDto) {
   @IsString()
@@ -15,5 +22,7 @@ export class UpdateGroupDto extends PartialType(CreateGroupDto) {
 
   @IsArray()
   @IsOptional()
-  membersToUpdate?: UpdateMemberDto[];
+  @ValidateNested()
+  @Type(() => UpdateMemberWithGroupDto)
+  membersToUpdate?: UpdateMemberWithGroupDto[];
 }

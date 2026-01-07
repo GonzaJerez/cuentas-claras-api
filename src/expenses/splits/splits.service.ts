@@ -1,8 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { CreateSplitDto } from "./dto/create-split.dto";
 import { UpdateSplitDto } from "./dto/update-split.dto";
-import { DatabaseService } from "../config/database/database.service";
-import { Prisma } from "../../prisma/generated/client";
+import { DatabaseService } from "src/config/database/database.service";
+import { Prisma } from "prisma/generated/client";
 
 @Injectable()
 export class SplitsService {

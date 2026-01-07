@@ -20,7 +20,7 @@ import { EventEmitter2 } from "@nestjs/event-emitter";
 import { UserEntity } from "src/users/entities/user.entity";
 import { ValidateSecurityCodeDto } from "../dto/validate-security-code.dto";
 import { RecoverPasswordDto } from "../dto/recover-password.dto";
-import { BasicUserResponse } from "src/users/dto/responses/basic-user.response";
+import { SimpleUserResponse } from "src/users/dto/responses/simple-user.response";
 import { LoginResponseDto } from "../dto/responses/login.response";
 
 @Injectable()
@@ -70,10 +70,7 @@ export class AuthService {
       token: this.generateToken({
         sessionId: session.id,
       }),
-      user: {
-        email: user.email,
-        name: user.name,
-      },
+      user: SimpleUserResponse.fromUserEntity(user),
     };
   }
 
@@ -134,10 +131,7 @@ export class AuthService {
       token: this.generateToken({
         sessionId: session.id,
       }),
-      user: {
-        email: user.email,
-        name: user.name,
-      },
+      user: SimpleUserResponse.fromUserEntity(user),
     };
   }
 
@@ -189,10 +183,7 @@ export class AuthService {
         token: this.generateToken({
           sessionId: session.id,
         }),
-        user: {
-          email: user.email,
-          name: user.name,
-        },
+        user: SimpleUserResponse.fromUserEntity(user),
       };
     }
 
@@ -207,7 +198,7 @@ export class AuthService {
 
     // If the user is already logged in anonymously, update the user with the google information and return the token for the existing session
     if (existingAnonymousSession) {
-      await this.db.user.update({
+      const updatedUser = await this.db.user.update({
         where: { id: existingAnonymousSession.userId },
         data: {
           anonymous: false,
@@ -222,10 +213,7 @@ export class AuthService {
         token: this.generateToken({
           sessionId: existingAnonymousSession.id,
         }),
-        user: {
-          email: userFromGoogle.email,
-          name: userFromGoogle.name,
-        },
+        user: SimpleUserResponse.fromUserEntity(updatedUser),
       };
     }
 
@@ -250,16 +238,13 @@ export class AuthService {
       token: this.generateToken({
         sessionId: session.id,
       }),
-      user: {
-        email: newUser.email,
-        name: newUser.name,
-      },
+      user: SimpleUserResponse.fromUserEntity(newUser),
     };
   }
 
   async register(
     registerDto: CreateUserWithMailDto,
-  ): Promise<BasicUserResponse> {
+  ): Promise<SimpleUserResponse> {
     const user = await this.db.user.findUnique({
       where: { email: registerDto.email },
     });
@@ -291,10 +276,7 @@ export class AuthService {
     });
 
     // Return only the user without the token authentication
-    return {
-      email: newUser.email,
-      name: newUser.name,
-    };
+    return SimpleUserResponse.fromUserEntity(newUser);
   }
 
   async logout(logoutDto: LogoutDto, user: UserEntity): Promise<void> {
@@ -316,52 +298,9 @@ export class AuthService {
     return;
   }
 
-  // async addAuthenticationWithEmailToAnonymousUser(
-  //   syncUserEmailDto: UpdateEmailDto,
-  //   user: UserEntity,
-  // ): Promise<BasicUserResponse> {
-  //   if (user.state !== UserState.EMAIL_CONFIRMATION_PENDING) {
-  //     throw new BadRequestException("You are not allowed to sync your email");
-  //   }
-
-  //   const existingUserWithEmail = await this.db.user.findUnique({
-  //     where: { email: syncUserEmailDto.email },
-  //   });
-
-  //   if (existingUserWithEmail) {
-  //     throw new BadRequestException("User with this email already exists");
-  //   }
-
-  //   const { securityCode, securityCodeExpiration, hashedSecurityCode } =
-  //     this.generateSecurityCode();
-
-  //   const updatedUser = await this.db.user.update({
-  //     where: { id: user.id },
-  //     data: {
-  //       email: syncUserEmailDto.email,
-  //       password: bcrypt.hashSync(syncUserEmailDto.password, 10),
-  //       securityCode: hashedSecurityCode,
-  //       securityCodeExpiresAt: securityCodeExpiration,
-  //       anonymous: false,
-  //       state: UserState.EMAIL_CONFIRMATION_PENDING,
-  //     },
-  //   });
-
-  //   this.eventEmitter.emit("auth.confirmation-email", {
-  //     email: syncUserEmailDto.email,
-  //     name: user.name,
-  //     securityCode,
-  //   });
-
-  //   return {
-  //     email: updatedUser.email,
-  //     name: updatedUser.name,
-  //   };
-  // }
-
   async recoverPassword(
     recoverPasswordDto: RecoverPasswordDto,
-  ): Promise<BasicUserResponse> {
+  ): Promise<SimpleUserResponse> {
     const user = await this.db.user.findUnique({
       where: { email: recoverPasswordDto.email },
     });
@@ -387,16 +326,13 @@ export class AuthService {
       securityCode,
     });
 
-    return {
-      email: user.email,
-      name: user.name,
-    };
+    return SimpleUserResponse.fromUserEntity(user);
   }
 
   // this method is used on confirm user email and recover password flows
   async validateSecurityCode(
     validateSecurityCodeDto: ValidateSecurityCodeDto,
-  ): Promise<{ user: BasicUserResponse; token: string | null }> {
+  ): Promise<{ user: SimpleUserResponse; token: string | null }> {
     const user = await this.db.user.findUnique({
       where: { email: validateSecurityCodeDto.email },
     });
@@ -449,10 +385,7 @@ export class AuthService {
     });
 
     return {
-      user: {
-        email: user.email,
-        name: user.name,
-      },
+      user: SimpleUserResponse.fromUserEntity(user),
       token,
     };
   }

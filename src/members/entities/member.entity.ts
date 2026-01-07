@@ -1,3 +1,4 @@
+import { UserEntity } from "src/users/entities/user.entity";
 import {
   Member,
   MemberRole,
@@ -11,9 +12,11 @@ export class MemberEntity implements Member {
   invitedById: string | null;
   role: MemberRole[];
   state: MemberState;
-  code: string;
+  code: string | null;
   createdAt: Date;
   notifications: boolean | null;
   defaultSplit: number | null;
-  invitedBy: Member | null;
+  invitedBy?: Member;
+
+  user: UserEntity;
 }

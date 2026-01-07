@@ -19,6 +19,7 @@ import { ListGroupResponse } from "./dto/responses/list-group.response";
 import { GroupResponse } from "./dto/responses/group.response";
 import { JoinGroupDto } from "./dto/join-group.dto";
 import { StandardResponse } from "src/shared/dto/responses.dto";
+import { MemberResponse } from "src/members/dto/responses/member.response";
 
 @Controller("groups")
 export class GroupsController {
@@ -81,7 +82,7 @@ export class GroupsController {
   join(
     @Body() joinGroupDto: JoinGroupDto,
     @GetUser() user: UserEntity,
-  ): Promise<GroupResponse> {
+  ): Promise<MemberResponse> {
     return this.groupsService.join(joinGroupDto, user);
   }
 }

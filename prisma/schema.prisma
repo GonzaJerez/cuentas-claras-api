@@ -47,7 +47,7 @@ model Group {
   name        String    @db.VarChar(255)
   description String?   @db.VarChar(255)
   createdAt   DateTime  @default(now()) @map("created_at")
-  splitType   SplitType @map("split_type")
+  splitType   SplitType @map("split_type") @default(EQUAL)
 
   members     Member[]
   categories  Category[]
@@ -74,26 +74,26 @@ model Member {
   invitedBy     Member?       @relation("MemberInvitations", fields: [invitedById], references: [id])
   payments      Payment[]
   splits        Split[]
-
+  expenses      Expense[]     @relation("ExpenseCreatedBy")
 
   @@map("members")
 }
 
 model Expense {
   id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  categoryId  String   @map("category_id") @db.Uuid
   groupId     String   @map("group_id") @db.Uuid
   title       String   @db.VarChar(255)
-  amount      Float    @db.DoublePrecision
   description String?  @db.VarChar(255)
   imageUri    String?  @map("image_uri") @db.VarChar(255)
   createdAt   DateTime @default(now()) @map("created_at")
   date        DateTime
+  createdById String   @map("created_by") @db.Uuid
 
-  category Category  @relation(fields: [categoryId], references: [id])
-  group    Group     @relation(fields: [groupId], references: [id])
-  payments Payment[]
-  splits   Split[]
+  createdBy        Member          @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
+  group            Group           @relation(fields: [groupId], references: [id])
+  payments         Payment[]
+  splits           Split[]
+  byCategory       ExpenseByCategory[]
 
   @@map("expenses")
 }
@@ -127,11 +127,24 @@ model Category {
   groupId String         @map("group_id") @db.Uuid
   name    String         @db.VarChar(255)
   icon    String         @db.VarChar(255)
+  state   CategoryState  @default(ACTIVE) @map("state")
 
-  group    Group     @relation(fields: [groupId], references: [id])
-  expenses Expense[]
+  group            Group            @relation(fields: [groupId], references: [id])
+  expenses        ExpenseByCategory[]
 
   @@map("categories")
+}
+
+model ExpenseByCategory {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  expenseId  String   @map("expense_id") @db.Uuid
+  categoryId String   @map("category_id") @db.Uuid
+  amount     Float    @db.DoublePrecision
+
+  expense  Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  category Category  @relation(fields: [categoryId], references: [id])
+
+  @@map("expense_categories")
 }
 
 enum SplitType {
@@ -170,4 +183,9 @@ enum SessionState {
 enum UserState {
   EMAIL_CONFIRMATION_PENDING
   ACTIVE
+}
+
+enum CategoryState {
+  ACTIVE
+  INACTIVE
 }

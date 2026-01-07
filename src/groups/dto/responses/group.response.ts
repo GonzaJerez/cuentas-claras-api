@@ -2,7 +2,7 @@ import { SplitType } from "@prisma/client";
 import { GroupEntity } from "src/groups/entities/group.entity";
 import { MemberResponse } from "src/members/dto/responses/member.response";
 import { MemberEntity } from "src/members/entities/member.entity";
-import { BasicUserResponse } from "src/users/dto/responses/basic-user.response";
+import { SimpleUserResponse } from "src/users/dto/responses/simple-user.response";
 
 export class GroupResponse {
   id: string;
@@ -15,7 +15,7 @@ export class GroupResponse {
   static toResponse(
     group: {
       members: ({
-        user: BasicUserResponse;
+        user: SimpleUserResponse;
       } & MemberEntity)[];
     } & GroupEntity,
   ): GroupResponse {

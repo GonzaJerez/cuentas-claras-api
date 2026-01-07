@@ -1,9 +1,16 @@
-import { Injectable } from "@nestjs/common";
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from "@nestjs/common";
 import { CreateExpenseDto } from "./dto/create-expense.dto";
 import { UpdateExpenseDto } from "./dto/update-expense.dto";
 import { DatabaseService } from "../config/database/database.service";
-import { PaymentsService } from "../payments/payments.service";
-import { SplitsService } from "../splits/splits.service";
+import { PaymentsService } from "./payments/payments.service";
+import { SplitsService } from "./splits/splits.service";
+import { UserEntity } from "src/users/entities/user.entity";
+import { ExpenseResponse } from "./dto/responses/expense.response";
+import { ExpenseByCategoryEntity } from "./entities/expense-category.entity";
 
 @Injectable()
 export class ExpensesService {
@@ -13,14 +20,73 @@ export class ExpensesService {
     private readonly splitsService: SplitsService,
   ) {}
 
-  async create(createExpenseDto: CreateExpenseDto) {
-    const { payments, splits, ...expenseData } = createExpenseDto;
+  async create(
+    createExpenseDto: CreateExpenseDto,
+    user: UserEntity,
+  ): Promise<ExpenseResponse> {
+    const expensesByCategory: ExpenseByCategoryEntity[] = [];
 
-    return this.db.$transaction(async (tx) => {
+    const member = await this.db.member.findFirst({
+      where: {
+        groupId: createExpenseDto.groupId,
+        userId: user.id,
+      },
+    });
+
+    if (!member) {
+      throw new NotFoundException("User is not a member of the group");
+    }
+
+    const { payments, splits, categoryAmounts, ...expenseData } =
+      createExpenseDto;
+
+    const expenseCreated = await this.db.$transaction(async (tx) => {
       // Create Expense
       const expense = await tx.expense.create({
-        data: expenseData,
+        data: {
+          ...expenseData,
+          groupId: expenseData.groupId,
+          createdById: member.id,
+          date: expenseData.date ?? new Date(),
+        },
+        include: {
+          byCategory: {
+            include: {
+              category: true,
+            },
+          },
+          splits: {
+            include: {
+              member: {
+                include: {
+                  user: true,
+                },
+              },
+            },
+          },
+          payments: {
+            include: {
+              member: {
+                include: {
+                  user: true,
+                },
+              },
+            },
+          },
+        },
       });
+
+      // Create Expenses By Categories
+      for (const categoryAmount of categoryAmounts) {
+        const expenseByCategory = await tx.expenseByCategory.create({
+          data: {
+            expenseId: expense.id,
+            categoryId: categoryAmount.categoryId,
+            amount: categoryAmount.amount,
+          },
+        });
+        expensesByCategory.push(expenseByCategory);
+      }
 
       // Create Payments
       for (const payment of payments) {
@@ -44,15 +110,70 @@ export class ExpensesService {
         );
       }
 
-      return expense;
+      // Reload expense with all relations
+      return tx.expense.findUnique({
+        where: { id: expense.id },
+        include: {
+          byCategory: {
+            include: {
+              category: true,
+            },
+          },
+          splits: {
+            include: {
+              member: {
+                include: {
+                  user: true,
+                },
+              },
+            },
+          },
+          payments: {
+            include: {
+              member: {
+                include: {
+                  user: true,
+                },
+              },
+            },
+          },
+        },
+      });
     });
+
+    if (!expenseCreated) {
+      throw new InternalServerErrorException("Failed to create expense");
+    }
+
+    return ExpenseResponse.fromEntity(expenseCreated);
   }
 
   findAll() {
     return this.db.expense.findMany({
       include: {
-        payments: true,
-        splits: true,
+        byCategory: {
+          include: {
+            category: true,
+          },
+        },
+        payments: {
+          include: {
+            member: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
+        splits: {
+          include: {
+            member: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
       },
     });
   }
@@ -61,8 +182,29 @@ export class ExpensesService {
     return this.db.expense.findUnique({
       where: { id },
       include: {
-        payments: true,
-        splits: true,
+        byCategory: {
+          include: {
+            category: true,
+          },
+        },
+        payments: {
+          include: {
+            member: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
+        splits: {
+          include: {
+            member: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
       },
     });
   }
@@ -76,13 +218,27 @@ export class ExpensesService {
     // Simplest approach: Delete existing related records and recreate if provided in DTO.
     // Or just update expense fields if no payments/splits provided.
 
-    const { payments, splits, ...expenseData } = updateExpenseDto;
+    const { payments, splits, categoryAmounts, ...expenseData } =
+      updateExpenseDto;
 
     return this.db.$transaction(async (tx) => {
-      const expense = await tx.expense.update({
+      await tx.expense.update({
         where: { id },
         data: expenseData,
       });
+
+      if (categoryAmounts) {
+        await tx.expenseByCategory.deleteMany({ where: { expenseId: id } });
+        for (const categoryAmount of categoryAmounts) {
+          await tx.expenseByCategory.create({
+            data: {
+              expenseId: id,
+              categoryId: categoryAmount.categoryId,
+              amount: categoryAmount.amount,
+            },
+          });
+        }
+      }
 
       if (payments) {
         // This assumes replacing all payments.
@@ -103,7 +259,35 @@ export class ExpensesService {
         }
       }
 
-      return expense;
+      // Reload expense with all relations
+      return tx.expense.findUnique({
+        where: { id },
+        include: {
+          byCategory: {
+            include: {
+              category: true,
+            },
+          },
+          payments: {
+            include: {
+              member: {
+                include: {
+                  user: true,
+                },
+              },
+            },
+          },
+          splits: {
+            include: {
+              member: {
+                include: {
+                  user: true,
+                },
+              },
+            },
+          },
+        },
+      });
     });
   }
 

@@ -17,10 +17,28 @@ import { GroupResponse } from "./dto/responses/group.response";
 import { NANOID_ALPHABET } from "src/shared/constants/nanoid-alphabet";
 import { customAlphabet } from "nanoid";
 import { JoinGroupDto } from "./dto/join-group.dto";
+import { MemberResponse } from "src/members/dto/responses/member.response";
+import { UpdateMemberWithGroupDto } from "src/members/dto/update-member-with-group.dto";
+import { CategoriesService } from "src/categories/categories.service";
+import { ExpenseListResponse } from "src/expenses/dto/responses/expense-list.response";
+
+const USER_SELECT = {
+  select: {
+    id: true,
+    name: true,
+    email: true,
+    initials: true,
+    state: true,
+    role: true,
+  },
+};
 
 @Injectable()
 export class GroupsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly categoriesService: CategoriesService,
+  ) {}
 
   async create(
     createGroupDto: CreateGroupDto,
@@ -28,48 +46,43 @@ export class GroupsService {
   ): Promise<GroupResponse> {
     const memberCode = customAlphabet(NANOID_ALPHABET, 12)();
 
-    const group = await this.db.group.create({
-      data: {
-        name: createGroupDto.name,
-        splitType: SplitType.EQUAL,
-        members: {
-          create: {
-            userId: user.id,
-            role: [MemberRole.CREATOR, MemberRole.ADMIN],
-            code: memberCode,
-          },
-        },
-      },
-      include: {
-        members: {
-          where: {
-            state: MemberState.ACTIVE,
-          },
-          include: {
-            user: {
-              select: {
-                name: true,
-                email: true,
-              },
+    const groupCreated = await this.db.$transaction(async (tx) => {
+      const group = await tx.group.create({
+        data: {
+          name: createGroupDto.name,
+          splitType: SplitType.EQUAL,
+          members: {
+            create: {
+              userId: user.id,
+              role: [MemberRole.CREATOR, MemberRole.ADMIN],
+              code: memberCode,
             },
           },
         },
-      },
+        include: {
+          members: {
+            where: {
+              state: MemberState.ACTIVE,
+            },
+            include: {
+              user: USER_SELECT,
+            },
+          },
+        },
+      });
+
+      await this.categoriesService.createInitialCategories(group.id, tx);
+
+      return group;
     });
 
     return {
-      id: group.id,
-      name: group.name,
-      description: group.description,
-      createdAt: group.createdAt,
-      splitType: group.splitType,
-      members: group.members.map((member) => ({
-        id: member.id,
-        name: member.user.name,
-        email: member.user.email,
-        role: member.role,
-        defaultSplit: member.defaultSplit,
-      })),
+      id: groupCreated.id,
+      name: groupCreated.name,
+      description: groupCreated.description,
+      createdAt: groupCreated.createdAt,
+      splitType: groupCreated.splitType,
+      members: groupCreated.members.map(MemberResponse.fromEntity),
     };
   }
 
@@ -134,12 +147,7 @@ export class GroupsService {
             ],
           },
           include: {
-            user: {
-              select: {
-                name: true,
-                email: true,
-              },
-            },
+            user: USER_SELECT,
           },
         },
       },
@@ -155,50 +163,38 @@ export class GroupsService {
 
     const lastExpenses = await this.db.expense.findMany({
       where: { groupId: id },
-      include: {
-        category: {
-          select: {
-            id: true,
-            name: true,
-            icon: true,
-          },
-        },
-      },
+      // include: {
+      //   category: {
+      //     select: {
+      //       id: true,
+      //       name: true,
+      //       icon: true,
+      //     },
+      //   },
+      // },
       orderBy: {
         date: "desc",
       },
       take: 5,
     });
 
-    const categories = await this.db.category.findMany({
-      where: { groupId: id },
-      select: {
-        id: true,
-        name: true,
-        icon: true,
-      },
-    });
+    // const categories = await this.db.category.findMany({
+    //   where: { groupId: id },
+    //   select: {
+    //     id: true,
+    //     name: true,
+    //     icon: true,
+    //   },
+    // });
 
     // TODO: Calculate balance
 
     return {
       ...group,
-      members: group.members.map((member) => ({
-        id: member.id,
-        name: member.user.name,
-        email: member.user.email,
-        role: member.role,
-        defaultSplit: member.defaultSplit,
-      })),
-      lastExpenses: lastExpenses.map((expense) => ({
-        id: expense.id,
-        title: expense.title,
-        amount: expense.amount,
-        date: expense.date,
-        category: expense.category,
-      })),
+      members: group.members.map(MemberResponse.fromEntity),
+      lastExpenses: lastExpenses.map(ExpenseListResponse.fromEntity),
       balance: 0,
-      categories,
+      // categories,
     };
   }
 
@@ -225,32 +221,75 @@ export class GroupsService {
       throw new ForbiddenException("You are not allowed to update this group");
     }
 
+    const membersToUpdate = updateGroupDto.membersToUpdate || [];
+
+    // Validate defaultSplit updates
+    await this.validateMembersSplits(id, membersToUpdate);
+
     await this.db.$transaction(async (tx) => {
       // Update the members of the group
-      for (const member of updateGroupDto.membersToUpdate || []) {
-        const currentMember = await tx.member.findUnique({
-          where: { id: member.id, groupId: id },
+      for (const memberToUpdateDto of membersToUpdate) {
+        const member = await tx.member.findUnique({
+          where: { id: memberToUpdateDto.id, groupId: id },
         });
+
+        if (!member) {
+          throw new NotFoundException(
+            `Member with id ${memberToUpdateDto.id} not found`,
+          );
+        }
 
         // Allow to update the state of the member to the new state if the new state is REMOVED to delete the member from the group,
         // or if the current state is PENDING and the new state is ACTIVE to activate the member
         // If the current state is LEFT, do nothing, to reactivate the member must use the join method
-        let newState = currentMember?.state;
+        let newState = member?.state;
+        let memberCode: string | null = null;
 
-        if (member.state === MemberState.REMOVED) {
-          newState = MemberState.REMOVED;
-        } else if (
-          currentMember?.state === MemberState.PENDING &&
-          member.state === MemberState.ACTIVE
-        ) {
-          newState = MemberState.ACTIVE;
+        switch (memberToUpdateDto.state) {
+          case MemberState.LEFT:
+            throw new BadRequestException(
+              "To remove a member, use the REMOVED state instead tha LEFT state",
+            );
+          case MemberState.PENDING:
+            throw new BadRequestException(
+              "Cannot update the state of a member to PENDING",
+            );
+          case MemberState.REMOVED:
+            if (member.state !== MemberState.ACTIVE) {
+              throw new BadRequestException(
+                `The member with id ${memberToUpdateDto.id} is not a member of the group`,
+              );
+            }
+            newState = MemberState.REMOVED;
+            memberCode = null;
+            break;
+          case MemberState.ACTIVE:
+            if (member.state === MemberState.ACTIVE) {
+              throw new BadRequestException(
+                `The member with id ${memberToUpdateDto.id} is already in the group`,
+              );
+            }
+            if (member.state === MemberState.LEFT) {
+              throw new ForbiddenException(
+                "You cannot reactivate a member that has left the group",
+              );
+            }
+            if (
+              member.state === MemberState.PENDING ||
+              member.state === MemberState.REMOVED
+            ) {
+              newState = MemberState.ACTIVE;
+              memberCode = customAlphabet(NANOID_ALPHABET, 12)();
+            }
+            break;
         }
 
         await tx.member.update({
-          where: { id: member.id, groupId: id },
+          where: { id: memberToUpdateDto.id, groupId: id },
           data: {
-            ...member,
+            ...memberToUpdateDto,
             state: newState,
+            code: memberCode,
           },
         });
       }
@@ -263,7 +302,11 @@ export class GroupsService {
       ) {
         await tx.group.update({
           where: { id },
-          data: updateGroupDto,
+          data: {
+            splitType: updateGroupDto.splitType,
+            description: updateGroupDto.description,
+            name: updateGroupDto.name,
+          },
         });
       }
     });
@@ -273,13 +316,11 @@ export class GroupsService {
       where: { id },
       include: {
         members: {
+          where: {
+            state: MemberState.ACTIVE,
+          },
           include: {
-            user: {
-              select: {
-                name: true,
-                email: true,
-              },
-            },
+            user: USER_SELECT,
           },
         },
       },
@@ -291,14 +332,7 @@ export class GroupsService {
       description: updatedGroup.description,
       splitType: updatedGroup.splitType,
       createdAt: updatedGroup.createdAt,
-      members:
-        updatedGroup.members.map((member) => ({
-          id: member.id,
-          name: member.user.name,
-          email: member.user.email || null,
-          role: member.role,
-          defaultSplit: member.defaultSplit || null,
-        })) || [],
+      members: updatedGroup.members.map(MemberResponse.fromEntity),
     };
   }
 
@@ -311,21 +345,16 @@ export class GroupsService {
       description: member.group.description,
       createdAt: member.group.createdAt,
       splitType: member.group.splitType,
-      members: member.group.members.map((member) => ({
-        id: member.id,
-        name: member.user.name,
-        email: member.user.email || null,
-        role: member.role,
-        defaultSplit: member.defaultSplit || null,
-      })),
+      members: member.group.members.map(MemberResponse.fromEntity),
     };
   }
 
   async join(
     joinGroupDto: JoinGroupDto,
     user: UserEntity,
-  ): Promise<GroupResponse> {
+  ): Promise<MemberResponse> {
     const invitator = await this.validateCodeToJoin(joinGroupDto.code, user);
+    const memberCode = customAlphabet(NANOID_ALPHABET, 12)();
 
     // If the user already left the group, reactivate them
     const memberLeftGroup = invitator.group.members.find(
@@ -337,39 +366,14 @@ export class GroupsService {
         where: { id: memberLeftGroup.id },
         data: {
           state: MemberState.ACTIVE,
+          code: memberCode,
         },
         include: {
-          group: {
-            include: {
-              members: {
-                include: {
-                  user: {
-                    select: {
-                      name: true,
-                      email: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
+          user: true,
         },
       });
 
-      return {
-        id: updatedMember.group.id,
-        name: updatedMember.group.name,
-        description: updatedMember.group.description,
-        createdAt: updatedMember.group.createdAt,
-        splitType: updatedMember.group.splitType,
-        members: updatedMember.group.members.map((m) => ({
-          id: m.id,
-          name: m.user.name,
-          email: m.user.email || null,
-          role: m.role,
-          defaultSplit: m.defaultSplit || null,
-        })),
-      };
+      return MemberResponse.fromEntity(updatedMember);
     }
 
     // If the user was removed from the group, add them to the pending list
@@ -384,37 +388,11 @@ export class GroupsService {
           state: MemberState.PENDING,
         },
         include: {
-          group: {
-            include: {
-              members: {
-                include: {
-                  user: {
-                    select: {
-                      name: true,
-                      email: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
+          user: true,
         },
       });
 
-      return {
-        id: updatedMember.group.id,
-        name: updatedMember.group.name,
-        description: updatedMember.group.description,
-        createdAt: updatedMember.group.createdAt,
-        splitType: updatedMember.group.splitType,
-        members: updatedMember.group.members.map((m) => ({
-          id: m.id,
-          name: m.user.name,
-          email: m.user.email || null,
-          role: m.role,
-          defaultSplit: m.defaultSplit || null,
-        })),
-      };
+      return MemberResponse.fromEntity(updatedMember);
     }
 
     // If the user is already a pending member of the group, throw an error
@@ -434,39 +412,14 @@ export class GroupsService {
         groupId: invitator.group.id,
         userId: user.id,
         invitedById: invitator.id,
+        code: memberCode,
       },
       include: {
-        group: {
-          include: {
-            members: {
-              include: {
-                user: {
-                  select: {
-                    name: true,
-                    email: true,
-                  },
-                },
-              },
-            },
-          },
-        },
+        user: true,
       },
     });
 
-    return {
-      id: member.group.id,
-      name: member.group.name,
-      description: member.group.description,
-      createdAt: member.group.createdAt,
-      splitType: member.group.splitType,
-      members: member.group.members.map((m) => ({
-        id: m.id,
-        name: m.user.name,
-        email: m.user.email || null,
-        role: m.role,
-        defaultSplit: m.defaultSplit || null,
-      })),
-    };
+    return MemberResponse.fromEntity(member);
   }
 
   private async validateCodeToJoin(code: string, user: UserEntity) {
@@ -477,12 +430,7 @@ export class GroupsService {
           include: {
             members: {
               include: {
-                user: {
-                  select: {
-                    name: true,
-                    email: true,
-                  },
-                },
+                user: USER_SELECT,
               },
             },
           },
@@ -490,7 +438,7 @@ export class GroupsService {
       },
     });
 
-    if (!invitator || invitator.state === MemberState.REMOVED) {
+    if (!invitator || invitator.state !== MemberState.ACTIVE) {
       throw new NotFoundException("Group not found");
     }
 
@@ -504,5 +452,70 @@ export class GroupsService {
     }
 
     return invitator;
+  }
+
+  private async validateMembersSplits(
+    groupId: string,
+    membersToUpdate: UpdateMemberWithGroupDto[],
+  ) {
+    if (membersToUpdate.length > 0) {
+      // Check if any member has a numeric defaultSplit value
+      const membersWithDefaultSplit = membersToUpdate.filter(
+        (m) => m.defaultSplit !== undefined && m.defaultSplit !== null,
+      );
+      const membersWithoutDefaultSplit = membersToUpdate.filter(
+        (m) => m.defaultSplit === undefined || m.defaultSplit === null,
+      );
+
+      // If some members have defaultSplit and others don't, throw an error
+      if (
+        membersWithDefaultSplit.length > 0 &&
+        membersWithoutDefaultSplit.length > 0
+      ) {
+        throw new BadRequestException(
+          "If any member has a defaultSplit value, all members to update must have a defaultSplit value",
+        );
+      }
+
+      // If any member is being updated with defaultSplit, all active members must be updated
+      if (membersWithDefaultSplit.length > 0) {
+        // Get all active members of the group
+        const activeMembers = await this.db.member.findMany({
+          where: {
+            groupId,
+            state: MemberState.ACTIVE,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        // Check if all active members are included in the update
+        const activeMemberIds = activeMembers.map((m) => m.id);
+        const membersToUpdateIds = membersToUpdate.map((m) => m.id);
+        const membersNotInUpdate = activeMemberIds.filter(
+          (id) => !membersToUpdateIds.includes(id),
+        );
+
+        if (membersNotInUpdate.length > 0) {
+          throw new BadRequestException(
+            "If updating defaultSplit, all active members of the group must be included in the update. Members not included in the update: [" +
+              membersNotInUpdate.join(", ") +
+              "]",
+          );
+        }
+
+        // Ensure the sum of all defaultSplit values is exactly 100
+        const totalDefaultSplit = membersToUpdate.reduce(
+          (sum, member) => sum + member.defaultSplit,
+          0,
+        );
+        if (totalDefaultSplit !== 100) {
+          throw new BadRequestException(
+            `The sum of all defaultSplit values must be exactly 100. Current sum: ${totalDefaultSplit}`,
+          );
+        }
+      }
+    }
   }
 }

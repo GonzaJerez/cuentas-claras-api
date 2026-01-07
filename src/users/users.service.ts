@@ -3,16 +3,18 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
 } from "@nestjs/common";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { DatabaseService } from "../config/database/database.service";
 import { UserRole, UserState } from "prisma/generated/enums";
 import { UserEntity } from "./entities/user.entity";
 import { UpdatePasswordDto } from "./dto/update-password.dto";
-import { BasicUserResponse } from "./dto/responses/basic-user.response";
+import { SimpleUserResponse } from "./dto/responses/simple-user.response";
 import { UpdateEmailDto } from "./dto/sync-user-email.dto";
 import { AuthService } from "src/auth/services/auth.service";
 import { EventEmitter2 } from "@nestjs/event-emitter";
+import { CompleteUserResponse } from "./dto/responses/complete-user.response";
 
 @Injectable()
 export class UsersService {
@@ -22,20 +24,40 @@ export class UsersService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  update(id: string, updateUserDto: UpdateUserDto, user: UserEntity) {
+  async findOne(id: string, user: UserEntity): Promise<CompleteUserResponse> {
+    if (id !== user.id && user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException("You are not allowed to access this user");
+    }
+
+    const userFound = await this.db.user.findUnique({
+      where: { id },
+    });
+    if (!userFound) {
+      throw new NotFoundException("User not found");
+    }
+    return CompleteUserResponse.fromUserEntity(userFound);
+  }
+
+  async update(
+    id: string,
+    updateUserDto: UpdateUserDto,
+    user: UserEntity,
+  ): Promise<SimpleUserResponse> {
     if (user.id !== id && user.role !== UserRole.ADMIN) {
       throw new ForbiddenException("You are not allowed to update this user");
     }
-    return this.db.user.update({
+    const updatedUser = await this.db.user.update({
       where: { id },
       data: updateUserDto,
     });
+
+    return SimpleUserResponse.fromUserEntity(updatedUser);
   }
 
   async updatePassword(
     updatePasswordDto: UpdatePasswordDto,
     user: UserEntity,
-  ): Promise<BasicUserResponse> {
+  ): Promise<SimpleUserResponse> {
     if (user.anonymous || !user.email || !user.password) {
       throw new ForbiddenException(
         "You are not allowed to update your password",
@@ -56,10 +78,7 @@ export class UsersService {
       },
     });
 
-    return {
-      email: updatedUser.email,
-      name: updatedUser.name,
-    };
+    return SimpleUserResponse.fromUserEntity(updatedUser);
   }
 
   async updateEmail(updateEmailDto: UpdateEmailDto, user: UserEntity) {
@@ -104,9 +123,6 @@ export class UsersService {
       securityCode,
     });
 
-    return {
-      email: updatedUser.email,
-      name: updatedUser.name,
-    };
+    return SimpleUserResponse.fromUserEntity(updatedUser);
   }
 }

@@ -1,6 +1,5 @@
-import { MemberRole } from "prisma/generated/enums";
+import { MemberRole, MemberState } from "prisma/generated/enums";
 import { MemberEntity } from "src/members/entities/member.entity";
-import { BasicUserResponse } from "src/users/dto/responses/basic-user.response";
 
 export class MemberResponse {
   id: string;
@@ -8,18 +7,18 @@ export class MemberResponse {
   email: string | null;
   role: MemberRole[];
   defaultSplit: number | null;
+  initials: string;
+  state: MemberState;
 
-  static fromEntity(
-    entity: {
-      user: BasicUserResponse;
-    } & MemberEntity,
-  ): MemberResponse {
+  static fromEntity(entity: MemberEntity): MemberResponse {
     return {
       id: entity.id,
       name: entity.user.name,
       email: entity.user.email,
       role: entity.role,
       defaultSplit: entity.defaultSplit,
+      initials: entity.user.initials,
+      state: entity.state,
     };
   }
 }

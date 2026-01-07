@@ -25,18 +25,25 @@ export class ExpenseSplitDto {
   amount: number;
 }
 
-export class CreateExpenseDto {
+export class ExpenseCategoryAmountDto {
   @IsUUID()
   categoryId: string;
 
+  @IsNumber()
+  amount: number;
+}
+
+export class CreateExpenseDto {
   @IsUUID()
   groupId: string;
 
   @IsString()
   title: string;
 
-  @IsNumber()
-  amount: number;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExpenseCategoryAmountDto)
+  categoryAmounts: ExpenseCategoryAmountDto[];
 
   @IsString()
   @IsOptional()
@@ -47,7 +54,8 @@ export class CreateExpenseDto {
   imageUri?: string;
 
   @IsDateString()
-  date: string;
+  @IsOptional()
+  date?: Date;
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -55,6 +63,7 @@ export class CreateExpenseDto {
   payments: ExpensePaymentDto[];
 
   @IsArray()
+  @IsOptional()
   @ValidateNested({ each: true })
   @Type(() => ExpenseSplitDto)
   splits: ExpenseSplitDto[];
