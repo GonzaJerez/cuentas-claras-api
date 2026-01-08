@@ -140,6 +140,7 @@ model ExpenseByCategory {
   expenseId  String   @map("expense_id") @db.Uuid
   categoryId String   @map("category_id") @db.Uuid
   amount     Float    @db.DoublePrecision
+  items      String?  @db.VarChar(255)
 
   expense  Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
   category Category  @relation(fields: [categoryId], references: [id])

@@ -11,6 +11,7 @@ const envSchema = z.object({
   EMAIL_USER: z.string(),
   EMAIL_PASSWORD: z.string(),
   MOBILE_APP_URL: z.string(),
+  GEMINI_API_KEY: z.string(),
 });
 
 const { success, data: env, error } = envSchema.safeParse(process.env);

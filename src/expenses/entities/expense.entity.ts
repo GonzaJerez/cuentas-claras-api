@@ -1,7 +1,7 @@
 import { MemberEntity } from "src/members/entities/member.entity";
 import { SplitEntity } from "../splits/entities/split.entity";
 import { PaymentEntity } from "../payments/entities/payment.entity";
-import { ExpenseByCategoryEntity } from "./expense-category.entity";
+import { ExpenseByCategoryEntity } from "./expense-by-category.entity";
 
 export class ExpenseEntity {
   id: string;

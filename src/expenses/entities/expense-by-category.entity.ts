@@ -6,6 +6,7 @@ export class ExpenseByCategoryEntity implements PrismaExpenseByCategory {
   expenseId: string;
   categoryId: string;
   amount: number;
+  items: string | null;
 
   category?: CategoryEntity;
 }

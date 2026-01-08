@@ -31,6 +31,10 @@ export class ExpenseCategoryAmountDto {
 
   @IsNumber()
   amount: number;
+
+  @IsString()
+  @IsOptional()
+  items?: string;
 }
 
 export class CreateExpenseDto {

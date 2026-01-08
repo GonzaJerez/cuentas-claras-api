@@ -284,6 +284,11 @@ export class GroupsService {
             break;
         }
 
+        // If any member has a defaultSplit value, update the splitType to PERCENTAGE
+        if (memberToUpdateDto.defaultSplit) {
+          updateGroupDto.splitType = SplitType.PERCENTAGE;
+        }
+
         await tx.member.update({
           where: { id: memberToUpdateDto.id, groupId: id },
           data: {
