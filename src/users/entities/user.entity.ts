@@ -1,4 +1,9 @@
-import { User, UserRole, UserState } from "../../../prisma/generated/client";
+import {
+  Session,
+  User,
+  UserRole,
+  UserState,
+} from "../../../prisma/generated/client";
 
 export class UserEntity implements User {
   id: string;
@@ -12,6 +17,9 @@ export class UserEntity implements User {
   anonymous: boolean;
   role: UserRole;
   securityCode: string | null;
-  securityCodeExpiresAt: Date | null;
+  securityCodeCreatedAt: Date | null;
   state: UserState;
+
+  sessions?: Session[];
+  currentSession?: Session;
 }

@@ -13,11 +13,11 @@ export class MemberResponse {
   static fromEntity(entity: MemberEntity): MemberResponse {
     return {
       id: entity.id,
-      name: entity.user.name,
+      name: entity.user.name!,
       email: entity.user.email,
       role: entity.role,
       defaultSplit: entity.defaultSplit,
-      initials: entity.user.initials,
+      initials: entity.user.initials!,
       state: entity.state,
     };
   }

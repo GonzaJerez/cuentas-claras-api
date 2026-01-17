@@ -3,7 +3,8 @@ import { UserEntity } from "src/users/entities/user.entity";
 
 export class CompleteUserResponse {
   id: string;
-  name: string;
+  name: string | null;
+  initials: string | null;
   email: string | null;
   notifications: boolean;
   createdAt: Date;
@@ -16,6 +17,7 @@ export class CompleteUserResponse {
     return {
       id: user.id,
       name: user.name,
+      initials: user.initials,
       email: user.email,
       notifications: user.notifications,
       createdAt: user.createdAt,

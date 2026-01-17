@@ -9,8 +9,8 @@ datasource db {
 
 model User {
   id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  name          String    @db.VarChar(255)
-  initials      String    @db.VarChar(10)
+  name          String    @db.VarChar(255) @default("no-name")
+  initials      String    @db.VarChar(10) @default("")
   email         String?   @unique @db.VarChar(255)
   notifications Boolean   @default(true)
   createdAt     DateTime  @default(now()) @map("created_at")
@@ -19,7 +19,7 @@ model User {
   anonymous     Boolean   @default(false)
   role          UserRole  @default(USER)
   securityCode  String?   @db.VarChar(255) @map("security_code")
-  securityCodeExpiresAt DateTime? @map("security_code_expires_at")
+  securityCodeCreatedAt DateTime? @map("security_code_created_at")
   state       UserState   @default(ACTIVE) @map("state")
 
   members       Member[]

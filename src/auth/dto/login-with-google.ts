@@ -1,7 +1,6 @@
 import { IsString } from "class-validator";
-import { CreateSessionDto } from "./create-session.dto";
 
-export class LoginWithGoogleDto extends CreateSessionDto {
+export class LoginWithGoogleDto {
   @IsString()
   accessToken: string;
 }

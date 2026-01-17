@@ -5,4 +5,6 @@ export interface IProviderService {
     images: Array<{ buffer: Buffer; mimeType: string }>,
     prompt: string,
   ): Promise<string>;
+
+  analyzeText(text: string, prompt: string): Promise<string>;
 }

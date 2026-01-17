@@ -1,7 +1,6 @@
 import { IsEmail, Matches } from "class-validator";
-import { CreateSessionDto } from "./create-session.dto";
 
-export class LoginWithEmailDto extends CreateSessionDto {
+export class LoginWithEmailDto {
   @IsEmail()
   email: string;
 

@@ -68,4 +68,19 @@ export class GeminiService implements IProviderService {
     }
     return text;
   }
+
+  async analyzeText(text: string, prompt: string): Promise<string> {
+    const contents = [{ text: `${prompt}\n\nText to analyze:\n${text}` }];
+
+    const response = await this.ai.models.generateContent({
+      model: this.model,
+      contents,
+    });
+
+    const responseText = response.text;
+    if (!responseText) {
+      throw new Error("AI response is empty");
+    }
+    return responseText;
+  }
 }

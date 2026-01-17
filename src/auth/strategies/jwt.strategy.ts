@@ -5,6 +5,7 @@ import { JwtPayloadDto } from "../dto/jwt-payload.dto";
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { DatabaseService } from "src/config/database/database.service";
 import { SessionState } from "prisma/generated/enums";
+import { UserEntity } from "src/users/entities/user.entity";
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -29,6 +30,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException("Invalid session");
     }
 
-    return session.user;
+    const user: UserEntity = session.user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { user: _, ...sessionWithoutUser } = session;
+    user.currentSession = sessionWithoutUser;
+
+    return user;
   }
 }

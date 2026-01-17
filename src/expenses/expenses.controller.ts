@@ -12,6 +12,7 @@ import {
   FileTypeValidator,
   ParseFilePipe,
   BadRequestException,
+  Headers,
 } from "@nestjs/common";
 import { FileInterceptor, FilesInterceptor } from "@nestjs/platform-express";
 import { ExpensesService } from "./expenses.service";
@@ -24,6 +25,7 @@ import { StandardResponse } from "src/shared/dto/responses.dto";
 import { ExpenseResponse } from "./dto/responses/expense.response";
 import { AnalyzeAudioDto } from "./dto/analyze-audio.dto";
 import { AnalyzeImagesDto } from "./dto/analyze-images.dto";
+import { AnalyzeTextDto } from "./dto/analyze-text.dto";
 import { AiExpenseTemplateDto } from "./dto/ai-expense-template.dto";
 
 @Controller("expenses")
@@ -120,5 +122,24 @@ export class ExpensesController {
     );
 
     return StandardResponse.basic("Images analyzed successfully", result);
+  }
+
+  @Post("text")
+  @Auth()
+  async analyzeText(
+    @Body() analyzeTextDto: AnalyzeTextDto,
+    @GetUser() user: UserEntity,
+    @Headers("x-timezone-offset") timezoneOffset: number,
+  ): Promise<StandardResponse<AiExpenseTemplateDto>> {
+    if (!analyzeTextDto.text || analyzeTextDto.text.trim().length === 0) {
+      throw new BadRequestException(
+        "El campo 'text' es requerido y no puede estar vacío.",
+      );
+    }
+
+    return StandardResponse.basic(
+      "Text analyzed successfully",
+      this.expensesService.analyzeText(analyzeTextDto, user, timezoneOffset),
+    );
   }
 }

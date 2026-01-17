@@ -3,9 +3,9 @@ import { UserEntity } from "src/users/entities/user.entity";
 
 export class SimpleUserResponse {
   id: string;
-  name: string;
+  name: string | null;
   email: string | null;
-  initials: string;
+  initials: string | null;
   role: UserRole;
   state: UserState;
 

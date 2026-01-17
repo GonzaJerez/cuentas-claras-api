@@ -2,6 +2,7 @@ import { customAlphabet } from "nanoid";
 import * as bcrypt from "bcryptjs";
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -20,8 +21,14 @@ import { EventEmitter2 } from "@nestjs/event-emitter";
 import { UserEntity } from "src/users/entities/user.entity";
 import { ValidateSecurityCodeDto } from "../dto/validate-security-code.dto";
 import { RecoverPasswordDto } from "../dto/recover-password.dto";
+import { ResendSecurityCodeDto } from "../dto/resend-verification-code.dto";
 import { SimpleUserResponse } from "src/users/dto/responses/simple-user.response";
 import { LoginResponseDto } from "../dto/responses/login.response";
+import { DeviceHeadersDto } from "../dto/device-headers.dto";
+import {
+  SECURITY_CODE_EXPIRATION_TIME,
+  SECURITY_CODE_WINDOW_BETWEEN_RESEND_TIME,
+} from "../constants/security-code";
 
 @Injectable()
 export class AuthService {
@@ -31,7 +38,9 @@ export class AuthService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async loginAnonymous(loginDto: LoginAnonymousDto): Promise<LoginResponseDto> {
+  async loginAnonymous(
+    loginDto: LoginAnonymousDto & DeviceHeadersDto,
+  ): Promise<LoginResponseDto> {
     // If the device is already in use by a user, log out the existing session
     const existingSession = await this.db.session.findFirst({
       where: {
@@ -52,8 +61,6 @@ export class AuthService {
 
     const user = await this.db.user.create({
       data: {
-        name: loginDto.name,
-        initials: this.getInitials(loginDto.name),
         anonymous: true,
       },
     });
@@ -74,7 +81,9 @@ export class AuthService {
     };
   }
 
-  async loginWithEmail(loginDto: LoginWithEmailDto): Promise<LoginResponseDto> {
+  async loginWithEmail(
+    loginDto: LoginWithEmailDto & DeviceHeadersDto,
+  ): Promise<LoginResponseDto> {
     const user = await this.db.user.findUnique({
       where: { email: loginDto.email },
     });
@@ -83,7 +92,7 @@ export class AuthService {
     }
 
     if (user.state === UserState.EMAIL_CONFIRMATION_PENDING) {
-      throw new BadRequestException("User email confirmation is not completed");
+      throw new ForbiddenException("User email confirmation is not completed");
     }
 
     if (!user.password) {
@@ -136,7 +145,7 @@ export class AuthService {
   }
 
   async loginWithGoogle(
-    loginDto: LoginWithGoogleDto,
+    loginDto: LoginWithGoogleDto & DeviceHeadersDto,
   ): Promise<LoginResponseDto> {
     const googleResponse = await fetch(
       "https://oauth2.googleapis.com/tokeninfo?id_token=" +
@@ -253,8 +262,7 @@ export class AuthService {
       throw new BadRequestException("User already exists");
     }
 
-    const { securityCode, securityCodeExpiration, hashedSecurityCode } =
-      this.generateSecurityCode();
+    const { securityCode, hashedSecurityCode } = this.generateSecurityCode();
 
     const initials = this.getInitials(registerDto.name);
     const newUser = await this.db.user.create({
@@ -264,7 +272,7 @@ export class AuthService {
         email: registerDto.email,
         password: bcrypt.hashSync(registerDto.password, 10),
         securityCode: hashedSecurityCode,
-        securityCodeExpiresAt: securityCodeExpiration,
+        securityCodeCreatedAt: new Date(),
         state: UserState.EMAIL_CONFIRMATION_PENDING,
       },
     });
@@ -280,18 +288,8 @@ export class AuthService {
   }
 
   async logout(logoutDto: LogoutDto, user: UserEntity): Promise<void> {
-    const session = await this.db.session.findUnique({
-      where: {
-        id: logoutDto.sessionId,
-        state: SessionState.ACTIVE,
-        userId: user.id,
-      },
-    });
-    if (!session) {
-      throw new NotFoundException("Session not found");
-    }
     await this.db.session.update({
-      where: { id: logoutDto.sessionId },
+      where: { id: user.currentSession?.id },
       data: { state: SessionState.LOGGED_OUT, loggedOutAt: new Date() },
     });
 
@@ -309,14 +307,13 @@ export class AuthService {
       throw new NotFoundException("User not found");
     }
 
-    const { securityCode, securityCodeExpiration, hashedSecurityCode } =
-      this.generateSecurityCode();
+    const { securityCode, hashedSecurityCode } = this.generateSecurityCode();
 
     await this.db.user.update({
       where: { id: user.id },
       data: {
         securityCode: hashedSecurityCode,
-        securityCodeExpiresAt: securityCodeExpiration,
+        securityCodeCreatedAt: new Date(),
       },
     });
 
@@ -331,8 +328,8 @@ export class AuthService {
 
   // this method is used on confirm user email and recover password flows
   async validateSecurityCode(
-    validateSecurityCodeDto: ValidateSecurityCodeDto,
-  ): Promise<{ user: SimpleUserResponse; token: string | null }> {
+    validateSecurityCodeDto: ValidateSecurityCodeDto & DeviceHeadersDto,
+  ): Promise<LoginResponseDto> {
     const user = await this.db.user.findUnique({
       where: { email: validateSecurityCodeDto.email },
     });
@@ -343,43 +340,50 @@ export class AuthService {
 
     if (
       !user.securityCode ||
-      !bcrypt.compareSync(
-        validateSecurityCodeDto.securityCode,
-        user.securityCode,
-      )
+      !bcrypt.compareSync(validateSecurityCodeDto.code, user.securityCode)
     ) {
       throw new BadRequestException("Invalid security code");
     }
 
-    if (user.securityCodeExpiresAt && user.securityCodeExpiresAt < new Date()) {
+    if (
+      user.securityCodeCreatedAt &&
+      this.isSecurityCodeExpired(user.securityCodeCreatedAt)
+    ) {
+      await this.db.user.update({
+        where: { id: user.id },
+        data: {
+          securityCode: null,
+          securityCodeCreatedAt: null,
+        },
+      });
       throw new BadRequestException("Security code has expired");
     }
 
     let token: string | null = null;
 
-    if (
-      validateSecurityCodeDto.deviceId &&
-      validateSecurityCodeDto.deviceType
-    ) {
-      const session = await this.db.session.create({
-        data: {
-          deviceId: validateSecurityCodeDto.deviceId,
-          deviceType: validateSecurityCodeDto.deviceType,
-          userId: user.id,
-        },
-      });
+    // if (
+    //   validateSecurityCodeDto.deviceId &&
+    //   validateSecurityCodeDto.deviceType
+    // ) {
+    const session = await this.db.session.create({
+      data: {
+        deviceId: validateSecurityCodeDto.deviceId,
+        deviceType: validateSecurityCodeDto.deviceType,
+        userId: user.id,
+      },
+    });
 
-      token = this.generateToken({
-        sessionId: session.id,
-      });
-    }
+    token = this.generateToken({
+      sessionId: session.id,
+    });
+    // }
 
     await this.db.user.update({
       where: { id: user.id },
       data: {
         state: UserState.ACTIVE,
         securityCode: null,
-        securityCodeExpiresAt: null,
+        securityCodeCreatedAt: null,
         anonymous: false,
       },
     });
@@ -390,19 +394,79 @@ export class AuthService {
     };
   }
 
+  async resendVerificationCode(
+    resendVerificationCodeDto: ResendSecurityCodeDto,
+  ): Promise<SimpleUserResponse> {
+    const user = await this.db.user.findUnique({
+      where: { email: resendVerificationCodeDto.email },
+    });
+
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    if (
+      user.securityCodeCreatedAt &&
+      !this.isSecurityCodeResendAllowed(user.securityCodeCreatedAt)
+    ) {
+      throw new BadRequestException(
+        "You can only resend the verification code every 15 minutes",
+      );
+    }
+
+    const { securityCode, hashedSecurityCode } = this.generateSecurityCode();
+
+    await this.db.user.update({
+      where: { id: user.id },
+      data: {
+        securityCode: hashedSecurityCode,
+        securityCodeCreatedAt: new Date(),
+      },
+    });
+
+    this.eventEmitter.emit("auth.confirmation-email", {
+      email: user.email,
+      name: user.name,
+      securityCode,
+    });
+
+    return SimpleUserResponse.fromUserEntity(user);
+  }
+
+  async renewToken(
+    user: UserEntity,
+    deviceId: string,
+  ): Promise<LoginResponseDto> {
+    const session = await this.db.session.findFirst({
+      where: {
+        deviceId,
+        userId: user.id,
+        state: SessionState.ACTIVE,
+      },
+    });
+    if (!session) {
+      throw new NotFoundException("Session not found");
+    }
+    return {
+      token: this.generateToken({
+        sessionId: session.id,
+      }),
+      user: SimpleUserResponse.fromUserEntity(user),
+    };
+  }
+
   private generateToken(payload: JwtPayloadDto) {
     return this.jwtService.sign(payload);
   }
 
-  generateSecurityCode(expiresIn: number = 15) {
+  generateSecurityCode() {
     const securityCode = customAlphabet("0123456789", 6)();
-    const securityCodeExpiration = new Date(Date.now() + 1000 * 60 * expiresIn);
     const hashedSecurityCode = bcrypt.hashSync(securityCode, 10);
 
-    return { securityCode, securityCodeExpiration, hashedSecurityCode };
+    return { securityCode, hashedSecurityCode };
   }
 
-  private getInitials(name: string) {
+  getInitials(name: string) {
     if (!name || typeof name !== "string") return "";
     const trimmed = name.trim();
     if (!trimmed) return "";
@@ -415,5 +479,19 @@ export class AuthService {
         .map((word) => word[0].toUpperCase())
         .join("");
     }
+  }
+
+  private isSecurityCodeExpired(securityCodeCreatedAt: Date) {
+    const expirationTime =
+      securityCodeCreatedAt.getTime() + SECURITY_CODE_EXPIRATION_TIME;
+    return expirationTime < Date.now();
+  }
+
+  private isSecurityCodeResendAllowed(securityCodeCreatedAt: Date) {
+    const resendAllowedTime =
+      securityCodeCreatedAt.getTime() +
+      SECURITY_CODE_WINDOW_BETWEEN_RESEND_TIME;
+
+    return resendAllowedTime < Date.now();
   }
 }

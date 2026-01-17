@@ -15,6 +15,7 @@ import { UpdateEmailDto } from "./dto/sync-user-email.dto";
 import { AuthService } from "src/auth/services/auth.service";
 import { EventEmitter2 } from "@nestjs/event-emitter";
 import { CompleteUserResponse } from "./dto/responses/complete-user.response";
+import { Prisma } from "prisma/generated/client";
 
 @Injectable()
 export class UsersService {
@@ -46,9 +47,17 @@ export class UsersService {
     if (user.id !== id && user.role !== UserRole.ADMIN) {
       throw new ForbiddenException("You are not allowed to update this user");
     }
+    const dataToUpdate: Prisma.UserUpdateInput = {
+      ...updateUserDto,
+    };
+
+    if (updateUserDto.name) {
+      dataToUpdate.initials = this.authService.getInitials(updateUserDto.name);
+    }
+
     const updatedUser = await this.db.user.update({
       where: { id },
-      data: updateUserDto,
+      data: dataToUpdate,
     });
 
     return SimpleUserResponse.fromUserEntity(updatedUser);
@@ -90,7 +99,7 @@ export class UsersService {
       throw new BadRequestException("User with this email already exists");
     }
 
-    const { securityCode, securityCodeExpiration, hashedSecurityCode } =
+    const { securityCode, hashedSecurityCode } =
       this.authService.generateSecurityCode();
 
     if (!user.anonymous && updateEmailDto.password) {
@@ -111,7 +120,7 @@ export class UsersService {
           ? bcrypt.hashSync(updateEmailDto.password, 10)
           : undefined,
         securityCode: hashedSecurityCode,
-        securityCodeExpiresAt: securityCodeExpiration,
+        securityCodeCreatedAt: new Date(),
         anonymous: false,
         state: UserState.EMAIL_CONFIRMATION_PENDING,
       },

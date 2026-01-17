@@ -20,6 +20,7 @@ import { AiService } from "src/ai/providers/ai.service";
 import { RawAiExpenseData } from "src/ai/dto/raw-ai-expense-data.dto";
 import { MemberEntity } from "src/members/entities/member.entity";
 import { GroupEntity } from "src/groups/entities/group.entity";
+import { AnalyzeTextDto } from "./dto/analyze-text.dto";
 
 @Injectable()
 export class ExpensesService {
@@ -364,6 +365,34 @@ export class ExpensesService {
     return template;
   }
 
+  async analyzeText(
+    analyzeTextDto: AnalyzeTextDto,
+    user: UserEntity,
+    timezoneOffset: number,
+  ): Promise<AiExpenseTemplateDto> {
+    const { groupId, text } = analyzeTextDto;
+
+    const { context, members, categories, group, currentMember } =
+      await this.getContextToAnalize(groupId, user);
+
+    if (timezoneOffset) {
+      context.timezoneOffset = timezoneOffset;
+    }
+
+    // Analyze with AI
+    const rawData = await this.aiService.analyzeText(text, context);
+
+    // Map and return
+    return this.mapRawDataToTemplate({
+      rawData,
+      members,
+      categories,
+      currentMember,
+      group,
+      timezoneOffset,
+    });
+  }
+
   private async getContextToAnalize(
     groupId: string,
     user: UserEntity,
@@ -438,12 +467,14 @@ export class ExpensesService {
     currentMember,
     members,
     group,
+    timezoneOffset,
   }: {
     rawData: RawAiExpenseData;
     members: Array<MemberEntity>;
     categories: Array<{ id: string; name: string }>;
     currentMember: MemberEntity;
     group: GroupEntity;
+    timezoneOffset?: number;
   }): AiExpenseTemplateDto {
     // Map category names to IDs
     const categoryAmounts = rawData.detectedCategoryAmounts?.length
@@ -520,57 +551,6 @@ export class ExpensesService {
       });
     }
 
-    // // Map split names to member IDs
-    // let splits =
-    //   rawData.detectedSplits?.length && rawData.detectedSplits.length > 0
-    //     ? (rawData.detectedSplits
-    //         .map((split) => {
-    //           const member = members.find(
-    //             (m) =>
-    //               m.user.name.toLowerCase() === split.memberName.toLowerCase(),
-    //           );
-    //           if (!member) return null;
-    //           return {
-    //             memberId: member.id,
-    //             amount: split.amount ?? 0,
-    //             memberName: member.user.name,
-    //           };
-    //         })
-    //         .filter((s) => s !== null) as Array<{
-    //         memberId: string;
-    //         amount: number;
-    //         memberName: string;
-    //       }>)
-    //     : [];
-
-    // // If no splits detected, divide equally among all members
-    // if (splits.length === 0) {
-    //   const amountPerMember = totalAmount / members.length;
-    //   splits = members.map((m) => ({
-    //     memberId: m.id,
-    //     amount: amountPerMember,
-    //     memberName: m.user.name,
-    //   }));
-    // } else {
-    //   // If some splits don't have amounts, divide remaining equally
-    //   const splitsWithAmounts = splits.filter((s) => s.amount > 0);
-    //   const totalSplitAmount = splitsWithAmounts.reduce(
-    //     (sum, s) => sum + s.amount,
-    //     0,
-    //   );
-    //   const remainingAmount = totalAmount - totalSplitAmount;
-    //   const splitsWithoutAmounts = splits.filter((s) => s.amount === 0);
-    //   const amountPerRemaining =
-    //     splitsWithoutAmounts.length > 0
-    //       ? remainingAmount / splitsWithoutAmounts.length
-    //       : 0;
-
-    //   splits = splits.map((s) => ({
-    //     ...s,
-    //     amount: s.amount > 0 ? s.amount : amountPerRemaining,
-    //   }));
-    // }
-
     const splits = members.map((m) => {
       let amount = 0;
 
@@ -579,6 +559,9 @@ export class ExpensesService {
       } else {
         amount = m.defaultSplit ? totalAmount * (m.defaultSplit / 100) : 0;
       }
+
+      amount = Math.round(amount * 100) / 100; // Round to 2 decimal places
+
       return {
         memberId: m.id,
         amount,
@@ -586,9 +569,16 @@ export class ExpensesService {
       };
     });
 
+    const date = rawData.date
+      ? new Date(
+          new Date(rawData.date).getTime() +
+            (timezoneOffset ?? 0) * 60 * 60 * 1000,
+        )
+      : new Date();
+
     return {
       title: rawData.title,
-      date: rawData.date || new Date().toISOString(),
+      date: date.toISOString(),
       description: rawData.description || "",
       categoryAmounts,
       payments,
