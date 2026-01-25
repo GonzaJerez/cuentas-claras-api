@@ -17,6 +17,8 @@ export class MemberEntity implements Member {
   notifications: boolean | null;
   defaultSplit: number | null;
   invitedBy?: Member;
+  color: string;
+  backgroundColor: string;
 
   user: UserEntity;
 }

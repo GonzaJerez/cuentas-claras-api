@@ -60,6 +60,10 @@ export class UsersService {
       data: dataToUpdate,
     });
 
+    if (user.anonymous && user.name === "no-name" && updateUserDto.name) {
+      this.eventEmitter.emit("user.activated", user.id);
+    }
+
     return SimpleUserResponse.fromUserEntity(updatedUser);
   }
 

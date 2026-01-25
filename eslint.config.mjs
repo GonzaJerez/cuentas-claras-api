@@ -10,14 +10,13 @@ export default tseslint.config(
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
-  eslintPluginPrettierRecommended,
   {
     languageOptions: {
       globals: {
         ...globals.node,
         ...globals.jest,
       },
-      sourceType: "commonjs",
+      sourceType: "module",
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
@@ -36,4 +35,5 @@ export default tseslint.config(
       "@typescript-eslint/unbound-method": "off",
     },
   },
+  eslintPluginPrettierRecommended,
 );

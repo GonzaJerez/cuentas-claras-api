@@ -51,7 +51,7 @@ model Group {
 
   members     Member[]
   categories  Category[]
-  expenses    Expense[]
+  movements    Movement[]
 
   @@map("groups")
 }
@@ -67,45 +67,49 @@ model Member {
   defaultSplit  Float?        @map("default_split") @db.DoublePrecision
   state         MemberState   @default(ACTIVE)
   code          String?       @db.VarChar(255) @unique
+  color         String        @db.VarChar(7)
+  backgroundColor String      @map("background_color") @db.VarChar(7)
 
   invitations   Member[]      @relation("MemberInvitations")
   user          User          @relation(fields: [userId], references: [id])
   group         Group         @relation(fields: [groupId], references: [id])
   invitedBy     Member?       @relation("MemberInvitations", fields: [invitedById], references: [id])
-  payments      Payment[]
-  splits        Split[]
-  expenses      Expense[]     @relation("ExpenseCreatedBy")
+  payments      Payment[]     @relation("payments")
+  splits        Split[]       @relation("splits")
+  movements      Movement[]     @relation("movements")
+  transfersSent  Transfer[]     @relation("transfers_sent")
+  transfersReceived Transfer[]     @relation("transfers_received")
 
   @@map("members")
 }
 
-model Expense {
+model Movement {
   id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
   groupId     String   @map("group_id") @db.Uuid
   title       String   @db.VarChar(255)
-  description String?  @db.VarChar(255)
-  imageUri    String?  @map("image_uri") @db.VarChar(255)
-  createdAt   DateTime @default(now()) @map("created_at")
+  imageUris    String[]  @map("image_uris")
   date        DateTime
+  createdAt   DateTime @default(now()) @map("created_at")
   createdById String   @map("created_by") @db.Uuid
 
-  createdBy        Member          @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
+  createdBy        Member          @relation("movements", fields: [createdById], references: [id])
   group            Group           @relation(fields: [groupId], references: [id])
-  payments         Payment[]
-  splits           Split[]
-  byCategory       ExpenseByCategory[]
+  payments         Payment[]       @relation("payments")
+  splits           Split[]         @relation("splits")
+  expenses       Expense[]       @relation("expenses")
+  transfers      Transfer[]      @relation("transfers")
 
-  @@map("expenses")
+  @@map("movements")
 }
 
 model Payment {
   id        String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
   memberId  String  @map("member_id") @db.Uuid
-  expenseId String? @map("expense_id") @db.Uuid
+  movementId String @map("movement_id") @db.Uuid
   amount    Float   @db.DoublePrecision
 
-  member  Member   @relation(fields: [memberId], references: [id])
-  expense Expense? @relation(fields: [expenseId], references: [id])
+  member  Member   @relation("payments", fields: [memberId], references: [id])
+  movement Movement @relation("payments", fields: [movementId], references: [id])
 
   @@map("payments")
 }
@@ -113,13 +117,26 @@ model Payment {
 model Split {
   id        String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
   memberId  String  @map("member_id") @db.Uuid
-  expenseId String  @map("expense_id") @db.Uuid
+  movementId String  @map("movement_id") @db.Uuid
   amount    Float   @db.DoublePrecision
 
-  member  Member  @relation(fields: [memberId], references: [id])
-  expense Expense @relation(fields: [expenseId], references: [id])
+  member  Member  @relation("splits", fields: [memberId], references: [id])
+  movement Movement @relation("splits", fields: [movementId], references: [id])
 
   @@map("splits")
+}
+
+model Expense {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  movementId  String   @map("movement_id") @db.Uuid
+  categoryId String   @map("category_id") @db.Uuid
+  amount     Float    @db.DoublePrecision
+  description      String?  @db.VarChar(255)
+
+  movement  Movement  @relation("expenses", fields: [movementId], references: [id], onDelete: Cascade)
+  category Category  @relation("expenses", fields: [categoryId], references: [id])
+
+  @@map("expense_categories")
 }
 
 model Category {
@@ -130,22 +147,24 @@ model Category {
   state   CategoryState  @default(ACTIVE) @map("state")
 
   group            Group            @relation(fields: [groupId], references: [id])
-  expenses        ExpenseByCategory[]
+  expenses        Expense[]        @relation("expenses")
 
   @@map("categories")
 }
 
-model ExpenseByCategory {
-  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  expenseId  String   @map("expense_id") @db.Uuid
-  categoryId String   @map("category_id") @db.Uuid
-  amount     Float    @db.DoublePrecision
-  items      String?  @db.VarChar(255)
+model Transfer {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  amount      Float    @db.DoublePrecision
+  description String?  @db.VarChar(255)
+  movementId  String   @map("movement_id") @db.Uuid
+  fromMemberId String   @map("from_member_id") @db.Uuid
+  toMemberId  String   @map("to_member_id") @db.Uuid
 
-  expense  Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  category Category  @relation(fields: [categoryId], references: [id])
+  fromMember Member  @relation(fields: [fromMemberId], references: [id], name: "transfers_sent")
+  toMember Member  @relation(fields: [toMemberId], references: [id], name: "transfers_received")
+  movement Movement @relation("transfers", fields: [movementId], references: [id])
 
-  @@map("expense_categories")
+  @@map("transfers")
 }
 
 enum SplitType {

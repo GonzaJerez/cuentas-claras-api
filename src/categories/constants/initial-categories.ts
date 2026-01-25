@@ -10,4 +10,5 @@ export const INITIAL_CATEGORIES: InitialCategory[] = [
   { name: "Otros", icon: "others" },
   { name: "Salud", icon: "health" },
   { name: "Transporte", icon: "transport" },
+  { name: "Transferencias", icon: "transfer" },
 ];

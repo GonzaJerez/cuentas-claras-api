@@ -9,6 +9,7 @@ import { UserEntity } from "src/users/entities/user.entity";
 import { MemberRole, MemberState } from "prisma/generated/enums";
 import { MemberResponse } from "./dto/responses/member.response";
 import { MemberEntity } from "./entities/member.entity";
+import { MEMBER_COLORS, MemberColor } from "./constants/member-colors";
 
 @Injectable()
 export class MembersService {
@@ -94,5 +95,44 @@ export class MembersService {
     }
 
     return member;
+  }
+
+  // /**
+  //  * Gets the color to assign to a new member in a group.
+  //  * The first member gets a random color, subsequent members get sequential colors.
+  //  * @param groupId The ID of the group
+  //  * @param tx Optional transaction client (for use within transactions)
+  //  * @returns The color and backgroundColor to assign to the new member
+  //  */
+  // async getColorForNewMember(groupId: string, tx?: any): Promise<MemberColor> {
+  //   const db = tx || this.db;
+
+  //   // Count existing active members in the group
+  //   const existingMemberCount = await db.member.count({
+  //     where: {
+  //       groupId,
+  //       state: MemberState.ACTIVE,
+  //     },
+  //   });
+
+  //   return getColorForNewMember(groupId, existingMemberCount);
+  // }
+
+  async getColorForNewMember(groupId: string): Promise<MemberColor> {
+    const lastMember = await this.db.member.findFirst({
+      where: { groupId },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 1,
+    });
+
+    const lastIndex = MEMBER_COLORS.findIndex(
+      (memberColor) => memberColor.color === lastMember?.color,
+    );
+
+    const newColor = MEMBER_COLORS[(lastIndex + 1) % MEMBER_COLORS.length];
+
+    return newColor;
   }
 }

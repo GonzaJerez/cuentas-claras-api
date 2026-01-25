@@ -21,6 +21,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Get("/renew-token")
+  @Auth()
   renewToken(
     @GetUser() user: UserEntity,
     @Headers(DEVICE_ID_HEADER) deviceId: string,

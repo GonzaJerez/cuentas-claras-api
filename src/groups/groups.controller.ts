@@ -33,7 +33,7 @@ export class GroupsController {
   ): Promise<StandardResponse<GroupResponse>> {
     return StandardResponse.basic(
       "Group created successfully",
-      this.groupsService.create(createGroupDto, user),
+      this.groupsService.create(createGroupDto, user.id),
     );
   }
 
@@ -54,8 +54,11 @@ export class GroupsController {
   findOne(
     @Param("id") id: string,
     @GetUser() user: UserEntity,
-  ): Promise<GroupDetailsResponse> {
-    return this.groupsService.findOne(id, user);
+  ): Promise<StandardResponse<GroupDetailsResponse>> {
+    return StandardResponse.basic(
+      "Group fetched successfully",
+      this.groupsService.findOne(id, user),
+    );
   }
 
   @Patch(":id")

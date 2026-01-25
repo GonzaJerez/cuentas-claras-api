@@ -9,16 +9,22 @@ export class MemberResponse {
   defaultSplit: number | null;
   initials: string;
   state: MemberState;
+  userId: string;
+  color: string;
+  backgroundColor: string;
 
   static fromEntity(entity: MemberEntity): MemberResponse {
     return {
       id: entity.id,
-      name: entity.user.name!,
+      name: entity.user.name,
       email: entity.user.email,
       role: entity.role,
       defaultSplit: entity.defaultSplit,
-      initials: entity.user.initials!,
+      initials: entity.user.initials,
       state: entity.state,
+      userId: entity.userId,
+      color: entity.color,
+      backgroundColor: entity.backgroundColor,
     };
   }
 }

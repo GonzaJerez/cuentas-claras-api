@@ -6,12 +6,12 @@ import { DatabaseModule } from "./config/database/database.module";
 import { UsersModule } from "./users/users.module";
 import { GroupsModule } from "./groups/groups.module";
 import { MembersModule } from "./members/members.module";
-import { ExpensesModule } from "./expenses/expenses.module";
 import { CategoriesModule } from "./categories/categories.module";
 import { AuthModule } from "./auth/auth.module";
 import { EmailsModule } from "./emails/emails.module";
 import { EventEmitterModule } from "@nestjs/event-emitter";
 import { LoggingMiddleware } from "./config/logger/logging.middleware";
+import { MovementsModule } from "./movements/movements.module";
 
 @Module({
   imports: [
@@ -20,7 +20,7 @@ import { LoggingMiddleware } from "./config/logger/logging.middleware";
     UsersModule,
     GroupsModule,
     MembersModule,
-    ExpensesModule,
+    MovementsModule,
     CategoriesModule,
     AuthModule,
     EmailsModule,

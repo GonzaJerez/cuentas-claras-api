@@ -20,7 +20,10 @@ import { JoinGroupDto } from "./dto/join-group.dto";
 import { MemberResponse } from "src/members/dto/responses/member.response";
 import { UpdateMemberWithGroupDto } from "src/members/dto/update-member-with-group.dto";
 import { CategoriesService } from "src/categories/categories.service";
-import { ExpenseListResponse } from "src/expenses/dto/responses/expense-list.response";
+import { OnEvent } from "@nestjs/event-emitter";
+import { MembersService } from "src/members/members.service";
+import { MEMBER_COLORS } from "src/members/constants/member-colors";
+import { MovementMinimalResponse } from "src/movements/dto/responses/movement-minimal.response";
 
 const USER_SELECT = {
   select: {
@@ -38,13 +41,16 @@ export class GroupsService {
   constructor(
     private readonly db: DatabaseService,
     private readonly categoriesService: CategoriesService,
+    private readonly membersService: MembersService,
   ) {}
 
   async create(
     createGroupDto: CreateGroupDto,
-    user: UserEntity,
+    userId: string,
   ): Promise<GroupResponse> {
     const memberCode = customAlphabet(NANOID_ALPHABET, 12)();
+
+    const memberColorIndex = Math.floor(Math.random() * MEMBER_COLORS.length);
 
     const groupCreated = await this.db.$transaction(async (tx) => {
       const group = await tx.group.create({
@@ -53,9 +59,11 @@ export class GroupsService {
           splitType: SplitType.EQUAL,
           members: {
             create: {
-              userId: user.id,
+              userId,
               role: [MemberRole.CREATOR, MemberRole.ADMIN],
               code: memberCode,
+              color: MEMBER_COLORS[memberColorIndex].color,
+              backgroundColor: MEMBER_COLORS[memberColorIndex].backgroundColor,
             },
           },
         },
@@ -161,40 +169,65 @@ export class GroupsService {
       throw new ForbiddenException("You are not a member of this group");
     }
 
-    const lastExpenses = await this.db.expense.findMany({
+    const lastExpenses = await this.db.movement.findMany({
       where: { groupId: id },
-      // include: {
-      //   category: {
-      //     select: {
-      //       id: true,
-      //       name: true,
-      //       icon: true,
-      //     },
-      //   },
-      // },
+      include: {
+        expenses: {
+          include: {
+            category: true,
+          },
+        },
+        payments: {
+          include: {
+            member: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
+      },
       orderBy: {
         date: "desc",
       },
       take: 5,
     });
 
-    // const categories = await this.db.category.findMany({
-    //   where: { groupId: id },
-    //   select: {
-    //     id: true,
-    //     name: true,
-    //     icon: true,
-    //   },
-    // });
+    // Payments = lo que pago el usuario
+    const memberPayments = await this.db.payment.aggregate({
+      where: { member: { groupId: id, userId: user.id } },
+      _sum: { amount: true },
+    });
 
-    // TODO: Calculate balance
+    // Transfers sent = lo que envio el usuario a otros (tambien entra como lo que pago)
+    const memberTransfersSent = await this.db.transfer.aggregate({
+      where: { fromMember: { groupId: id, userId: user.id } },
+      _sum: { amount: true },
+    });
+
+    // Splits = lo que se deberia pagar el usuario
+    const memberSplits = await this.db.split.aggregate({
+      where: { member: { groupId: id, userId: user.id } },
+      _sum: { amount: true },
+    });
+
+    // Transfers received = lo que recibio el usuario de otros (tambien entra como lo que pago)
+    const memberTransfersReceived = await this.db.transfer.aggregate({
+      where: { toMember: { groupId: id, userId: user.id } },
+      _sum: { amount: true },
+    });
+
+    const balance =
+      (memberPayments._sum.amount ?? 0) +
+      (memberTransfersSent._sum.amount ?? 0) -
+      (memberTransfersReceived._sum.amount ?? 0) -
+      (memberSplits._sum.amount ?? 0);
 
     return {
       ...group,
       members: group.members.map(MemberResponse.fromEntity),
-      lastExpenses: lastExpenses.map(ExpenseListResponse.fromEntity),
-      balance: 0,
-      // categories,
+      lastExpenses: lastExpenses.map(MovementMinimalResponse.fromEntity),
+      userBalance: balance,
     };
   }
 
@@ -411,6 +444,10 @@ export class GroupsService {
       );
     }
 
+    const memberColors = await this.membersService.getColorForNewMember(
+      invitator.group.id,
+    );
+
     // If the user is not a member of the group, add them to the group
     const member = await this.db.member.create({
       data: {
@@ -418,6 +455,8 @@ export class GroupsService {
         userId: user.id,
         invitedById: invitator.id,
         code: memberCode,
+        color: memberColors.color,
+        backgroundColor: memberColors.backgroundColor,
       },
       include: {
         user: true,
@@ -522,5 +561,16 @@ export class GroupsService {
         }
       }
     }
+  }
+
+  @OnEvent("user.activated")
+  async initializeGroup(userId: string) {
+    const groupDto: CreateGroupDto = {
+      name: "Hogar",
+      description: "Grupo de la familia para compartir gastos",
+    };
+
+    const initialGroup = await this.create(groupDto, userId);
+    return initialGroup;
   }
 }
