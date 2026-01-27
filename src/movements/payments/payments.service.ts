@@ -1,39 +1,18 @@
 import { Injectable } from "@nestjs/common";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
-import { UpdatePaymentDto } from "./dto/update-payment.dto";
-import { DatabaseService } from "src/config/database/database.service";
-import { Prisma } from "prisma/generated/client";
+import { TransactionClient } from "prisma/generated/internal/prismaNamespace";
 
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor() {}
 
-  create(createPaymentDto: CreatePaymentDto, tx: Prisma.TransactionClient) {
+  async create(
+    movementId: string,
+    createPaymentDto: CreatePaymentDto,
+    tx: TransactionClient,
+  ) {
     return tx.payment.create({
-      data: createPaymentDto,
-    });
-  }
-
-  findAll() {
-    return this.db.payment.findMany();
-  }
-
-  findOne(id: string) {
-    return this.db.payment.findUnique({
-      where: { id },
-    });
-  }
-
-  update(id: string, updatePaymentDto: UpdatePaymentDto) {
-    return this.db.payment.update({
-      where: { id },
-      data: updatePaymentDto,
-    });
-  }
-
-  remove(id: string) {
-    return this.db.payment.delete({
-      where: { id },
+      data: { ...createPaymentDto, movementId },
     });
   }
 }

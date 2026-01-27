@@ -1,17 +1,20 @@
 import { CategoryResponse } from "src/categories/dto/responses/category.response";
-import { MemberResponse } from "src/members/dto/responses/member.response";
 import { MovementEntity } from "src/movements/entities/movement.entity";
+import { AmountByCategoryResponse } from "src/movements/amounts-by-categories/dto/responses/amount-by-category.response";
+import { PaymentResponse } from "src/movements/payments/dto/payment.response";
+import { SplitResponse } from "src/movements/splits/dto/split.response";
 
-export class MovementMinimalResponse {
+export class MovementDetailResponse {
   id: string;
   title: string;
   amount: number;
   date: Date;
   categories: CategoryResponse[];
-  paidBy: MemberResponse[];
-  receiver?: MemberResponse;
+  payments: PaymentResponse[];
+  splits: SplitResponse[];
+  amountsByCategories: AmountByCategoryResponse[];
 
-  static fromEntity(entity: MovementEntity): MovementMinimalResponse {
+  static fromEntity(entity: MovementEntity): MovementDetailResponse {
     const totalAmount = entity.amountsByCategories?.reduce(
       (acc, amountByCategory) => acc + amountByCategory.amount,
       0,
@@ -23,20 +26,17 @@ export class MovementMinimalResponse {
         .filter((category) => category !== undefined)
         .map(CategoryResponse.fromEntity) || [];
 
-    const members = entity.payments
-      ?.map((p) => p.member)
-      .map(MemberResponse.fromEntity);
-
-    const receiver = entity.payments?.find((p) => p.receiverId)?.receiver;
-
     return {
       id: entity.id,
       title: entity.title,
       amount: totalAmount ?? 0,
       date: entity.date,
       categories,
-      paidBy: members || [],
-      receiver: receiver ? MemberResponse.fromEntity(receiver) : undefined,
+      payments: entity.payments?.map(PaymentResponse.fromEntity) || [],
+      splits: entity.splits?.map(SplitResponse.fromEntity) || [],
+      amountsByCategories:
+        entity.amountsByCategories?.map(AmountByCategoryResponse.fromEntity) ||
+        [],
     };
   }
 }

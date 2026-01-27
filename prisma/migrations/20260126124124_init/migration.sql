@@ -19,11 +19,14 @@ CREATE TYPE "SessionState" AS ENUM ('ACTIVE', 'LOGGED_OUT');
 -- CreateEnum
 CREATE TYPE "UserState" AS ENUM ('EMAIL_CONFIRMATION_PENDING', 'ACTIVE');
 
+-- CreateEnum
+CREATE TYPE "CategoryState" AS ENUM ('ACTIVE', 'INACTIVE');
+
 -- CreateTable
 CREATE TABLE "users" (
     "id" UUID NOT NULL DEFAULT uuidv7(),
-    "name" VARCHAR(255) NOT NULL,
-    "initials" VARCHAR(10) NOT NULL,
+    "name" VARCHAR(255) NOT NULL DEFAULT 'no-name',
+    "initials" VARCHAR(10) NOT NULL DEFAULT '',
     "email" VARCHAR(255),
     "notifications" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -32,7 +35,7 @@ CREATE TABLE "users" (
     "anonymous" BOOLEAN NOT NULL DEFAULT false,
     "role" "UserRole" NOT NULL DEFAULT 'USER',
     "security_code" VARCHAR(255),
-    "security_code_expires_at" TIMESTAMP(3),
+    "security_code_created_at" TIMESTAMP(3),
     "state" "UserState" NOT NULL DEFAULT 'ACTIVE',
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
@@ -57,7 +60,7 @@ CREATE TABLE "groups" (
     "name" VARCHAR(255) NOT NULL,
     "description" VARCHAR(255),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "split_type" "SplitType" NOT NULL,
+    "split_type" "SplitType" NOT NULL DEFAULT 'EQUAL',
 
     CONSTRAINT "groups_pkey" PRIMARY KEY ("id")
 );
@@ -74,31 +77,32 @@ CREATE TABLE "members" (
     "default_split" DOUBLE PRECISION,
     "state" "MemberState" NOT NULL DEFAULT 'ACTIVE',
     "code" VARCHAR(255),
+    "color" VARCHAR(7) NOT NULL,
+    "background_color" VARCHAR(7) NOT NULL,
 
     CONSTRAINT "members_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "expenses" (
+CREATE TABLE "movements" (
     "id" UUID NOT NULL DEFAULT uuidv7(),
-    "category_id" UUID NOT NULL,
     "group_id" UUID NOT NULL,
     "title" VARCHAR(255) NOT NULL,
-    "amount" DOUBLE PRECISION NOT NULL,
-    "description" VARCHAR(255),
-    "image_uri" VARCHAR(255),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "image_uris" TEXT[],
     "date" TIMESTAMP(3) NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_by" UUID NOT NULL,
 
-    CONSTRAINT "expenses_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "movements_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "payments" (
     "id" UUID NOT NULL DEFAULT uuidv7(),
     "member_id" UUID NOT NULL,
-    "expense_id" UUID,
+    "movement_id" UUID NOT NULL,
     "amount" DOUBLE PRECISION NOT NULL,
+    "receiver_id" UUID,
 
     CONSTRAINT "payments_pkey" PRIMARY KEY ("id")
 );
@@ -107,10 +111,21 @@ CREATE TABLE "payments" (
 CREATE TABLE "splits" (
     "id" UUID NOT NULL DEFAULT uuidv7(),
     "member_id" UUID NOT NULL,
-    "expense_id" UUID NOT NULL,
+    "movement_id" UUID NOT NULL,
     "amount" DOUBLE PRECISION NOT NULL,
 
     CONSTRAINT "splits_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "amounts_by_categories" (
+    "id" UUID NOT NULL DEFAULT uuidv7(),
+    "movement_id" UUID NOT NULL,
+    "category_id" UUID NOT NULL,
+    "amount" DOUBLE PRECISION NOT NULL,
+    "description" VARCHAR(255),
+
+    CONSTRAINT "amounts_by_categories_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -119,6 +134,7 @@ CREATE TABLE "categories" (
     "group_id" UUID NOT NULL,
     "name" VARCHAR(255) NOT NULL,
     "icon" VARCHAR(255) NOT NULL,
+    "state" "CategoryState" NOT NULL DEFAULT 'ACTIVE',
 
     CONSTRAINT "categories_pkey" PRIMARY KEY ("id")
 );
@@ -142,22 +158,31 @@ ALTER TABLE "members" ADD CONSTRAINT "members_group_id_fkey" FOREIGN KEY ("group
 ALTER TABLE "members" ADD CONSTRAINT "members_invited_by_fkey" FOREIGN KEY ("invited_by") REFERENCES "members"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "expenses" ADD CONSTRAINT "expenses_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "movements" ADD CONSTRAINT "movements_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "members"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "expenses" ADD CONSTRAINT "expenses_group_id_fkey" FOREIGN KEY ("group_id") REFERENCES "groups"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "movements" ADD CONSTRAINT "movements_group_id_fkey" FOREIGN KEY ("group_id") REFERENCES "groups"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "payments" ADD CONSTRAINT "payments_member_id_fkey" FOREIGN KEY ("member_id") REFERENCES "members"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "payments" ADD CONSTRAINT "payments_expense_id_fkey" FOREIGN KEY ("expense_id") REFERENCES "expenses"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "payments" ADD CONSTRAINT "payments_receiver_id_fkey" FOREIGN KEY ("receiver_id") REFERENCES "members"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payments" ADD CONSTRAINT "payments_movement_id_fkey" FOREIGN KEY ("movement_id") REFERENCES "movements"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "splits" ADD CONSTRAINT "splits_member_id_fkey" FOREIGN KEY ("member_id") REFERENCES "members"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "splits" ADD CONSTRAINT "splits_expense_id_fkey" FOREIGN KEY ("expense_id") REFERENCES "expenses"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "splits" ADD CONSTRAINT "splits_movement_id_fkey" FOREIGN KEY ("movement_id") REFERENCES "movements"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "amounts_by_categories" ADD CONSTRAINT "amounts_by_categories_movement_id_fkey" FOREIGN KEY ("movement_id") REFERENCES "movements"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "amounts_by_categories" ADD CONSTRAINT "amounts_by_categories_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "categories" ADD CONSTRAINT "categories_group_id_fkey" FOREIGN KEY ("group_id") REFERENCES "groups"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

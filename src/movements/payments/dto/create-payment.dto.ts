@@ -1,13 +1,13 @@
-import { IsUUID, IsNumber, IsOptional } from "class-validator";
+import { IsNumber, IsOptional, IsUUID } from "class-validator";
 
 export class CreatePaymentDto {
   @IsUUID()
   memberId: string;
 
-  @IsUUID()
-  @IsOptional()
-  movementId: string;
-
   @IsNumber()
   amount: number;
+
+  @IsUUID()
+  @IsOptional()
+  receiverId?: string;
 }

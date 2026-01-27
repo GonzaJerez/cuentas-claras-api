@@ -169,10 +169,10 @@ export class GroupsService {
       throw new ForbiddenException("You are not a member of this group");
     }
 
-    const lastExpenses = await this.db.movement.findMany({
+    const lastMovements = await this.db.movement.findMany({
       where: { groupId: id },
       include: {
-        expenses: {
+        amountsByCategories: {
           include: {
             category: true,
           },
@@ -199,34 +199,27 @@ export class GroupsService {
       _sum: { amount: true },
     });
 
-    // Transfers sent = lo que envio el usuario a otros (tambien entra como lo que pago)
-    const memberTransfersSent = await this.db.transfer.aggregate({
-      where: { fromMember: { groupId: id, userId: user.id } },
-      _sum: { amount: true },
-    });
-
     // Splits = lo que se deberia pagar el usuario
     const memberSplits = await this.db.split.aggregate({
       where: { member: { groupId: id, userId: user.id } },
       _sum: { amount: true },
     });
 
-    // Transfers received = lo que recibio el usuario de otros (tambien entra como lo que pago)
-    const memberTransfersReceived = await this.db.transfer.aggregate({
-      where: { toMember: { groupId: id, userId: user.id } },
+    // Payments received = lo que recibio el usuario de otros (tambien entra como lo que pago)
+    const memberPaymentsReceived = await this.db.payment.aggregate({
+      where: { receiver: { groupId: id, userId: user.id } },
       _sum: { amount: true },
     });
 
     const balance =
-      (memberPayments._sum.amount ?? 0) +
-      (memberTransfersSent._sum.amount ?? 0) -
-      (memberTransfersReceived._sum.amount ?? 0) -
+      (memberPayments._sum.amount ?? 0) -
+      (memberPaymentsReceived._sum.amount ?? 0) -
       (memberSplits._sum.amount ?? 0);
 
     return {
       ...group,
       members: group.members.map(MemberResponse.fromEntity),
-      lastExpenses: lastExpenses.map(MovementMinimalResponse.fromEntity),
+      lastExpenses: lastMovements.map(MovementMinimalResponse.fromEntity),
       userBalance: balance,
     };
   }

@@ -2,8 +2,7 @@ import { MemberEntity } from "src/members/entities/member.entity";
 import { SplitEntity } from "../splits/entities/split.entity";
 import { PaymentEntity } from "../payments/entities/payment.entity";
 import { Movement } from "prisma/generated/client";
-import { ExpenseEntity } from "../expenses/entities/expense.entity";
-import { TransferEntity } from "../transfers/entities/transfer.entity";
+import { AmountByCategoryEntity } from "src/movements/amounts-by-categories/entities/amount-by-category.entity";
 
 export class MovementEntity implements Movement {
   id: string;
@@ -15,8 +14,7 @@ export class MovementEntity implements Movement {
   createdById: string;
 
   createdBy?: MemberEntity;
-  expenses?: ExpenseEntity[];
+  amountsByCategories?: AmountByCategoryEntity[];
   splits?: SplitEntity[];
   payments?: PaymentEntity[];
-  transfers?: TransferEntity[];
 }

@@ -1,39 +1,18 @@
 import { Injectable } from "@nestjs/common";
 import { CreateSplitDto } from "./dto/create-split.dto";
-import { UpdateSplitDto } from "./dto/update-split.dto";
-import { DatabaseService } from "src/config/database/database.service";
-import { Prisma } from "prisma/generated/client";
+import { TransactionClient } from "prisma/generated/internal/prismaNamespace";
 
 @Injectable()
 export class SplitsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor() {}
 
-  create(createSplitDto: CreateSplitDto, tx: Prisma.TransactionClient) {
+  async create(
+    movementId: string,
+    createSplitDto: CreateSplitDto,
+    tx: TransactionClient,
+  ) {
     return tx.split.create({
-      data: createSplitDto,
-    });
-  }
-
-  findAll() {
-    return this.db.split.findMany();
-  }
-
-  findOne(id: string) {
-    return this.db.split.findUnique({
-      where: { id },
-    });
-  }
-
-  update(id: string, updateSplitDto: UpdateSplitDto) {
-    return this.db.split.update({
-      where: { id },
-      data: updateSplitDto,
-    });
-  }
-
-  remove(id: string) {
-    return this.db.split.delete({
-      where: { id },
+      data: { ...createSplitDto, movementId },
     });
   }
 }

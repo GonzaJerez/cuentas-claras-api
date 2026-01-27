@@ -3,19 +3,16 @@ import { MovementsService } from "./movements.service";
 import { MovementsController } from "./movements.controller";
 import { SplitsService } from "./splits/splits.service";
 import { PaymentsService } from "./payments/payments.service";
-import { AIModule } from "src/ai/ai.module";
-import { TransfersService } from "./transfers/transfers.service";
-import { ExpensesService } from "./expenses/expenses.service";
+import { AmountByCategoryService } from "./amounts-by-categories/amount-by-category.service";
 
 @Module({
-  imports: [AIModule],
+  imports: [],
   controllers: [MovementsController],
   providers: [
     MovementsService,
-    ExpensesService,
+    AmountByCategoryService,
     PaymentsService,
     SplitsService,
-    TransfersService,
   ],
 })
 export class MovementsModule {}

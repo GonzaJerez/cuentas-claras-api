@@ -8,36 +8,36 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  name          String    @db.VarChar(255) @default("no-name")
-  initials      String    @db.VarChar(10) @default("")
-  email         String?   @unique @db.VarChar(255)
-  notifications Boolean   @default(true)
-  createdAt     DateTime  @default(now()) @map("created_at")
-  password      String?   @db.VarChar(255)
-  loginWithGoogle Boolean @default(false) @map("login_wih_google")
-  anonymous     Boolean   @default(false)
-  role          UserRole  @default(USER)
-  securityCode  String?   @db.VarChar(255) @map("security_code")
+  id                    String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  name                  String    @default("no-name") @db.VarChar(255)
+  initials              String    @default("") @db.VarChar(10)
+  email                 String?   @unique @db.VarChar(255)
+  notifications         Boolean   @default(true)
+  createdAt             DateTime  @default(now()) @map("created_at")
+  password              String?   @db.VarChar(255)
+  loginWithGoogle       Boolean   @default(false) @map("login_wih_google")
+  anonymous             Boolean   @default(false)
+  role                  UserRole  @default(USER)
+  securityCode          String?   @map("security_code") @db.VarChar(255)
   securityCodeCreatedAt DateTime? @map("security_code_created_at")
-  state       UserState   @default(ACTIVE) @map("state")
+  state                 UserState @default(ACTIVE) @map("state")
 
-  members       Member[]
-  sessions      Session[]
+  members  Member[]
+  sessions Session[]
 
   @@map("users")
 }
 
 model Session {
-  id          String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  deviceId    String      @db.VarChar(255)
-  createdAt   DateTime    @default(now()) @map("created_at")
-  loggedOutAt DateTime?   @map("logged_out_at")
-  deviceType  DeviceType  @map("device_type")
-  userId      String      @map("user_id") @db.Uuid
+  id          String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  deviceId    String       @db.VarChar(255)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  loggedOutAt DateTime?    @map("logged_out_at")
+  deviceType  DeviceType   @map("device_type")
+  userId      String       @map("user_id") @db.Uuid
   state       SessionState @default(ACTIVE) @map("state")
 
-  user        User        @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@map("sessions")
 }
@@ -47,38 +47,37 @@ model Group {
   name        String    @db.VarChar(255)
   description String?   @db.VarChar(255)
   createdAt   DateTime  @default(now()) @map("created_at")
-  splitType   SplitType @map("split_type") @default(EQUAL)
+  splitType   SplitType @default(EQUAL) @map("split_type")
 
-  members     Member[]
-  categories  Category[]
-  movements    Movement[]
+  members    Member[]
+  categories Category[]
+  expenses   Movement[]
 
   @@map("groups")
 }
 
 model Member {
-  id            String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  userId        String        @map("user_id") @db.Uuid
-  groupId       String        @map("group_id") @db.Uuid
-  invitedById   String?       @map("invited_by") @db.Uuid
-  role          MemberRole[]  @default([MEMBER])
-  createdAt     DateTime      @default(now()) @map("created_at")
-  notifications Boolean?      @default(true)
-  defaultSplit  Float?        @map("default_split") @db.DoublePrecision
-  state         MemberState   @default(ACTIVE)
-  code          String?       @db.VarChar(255) @unique
-  color         String        @db.VarChar(7)
-  backgroundColor String      @map("background_color") @db.VarChar(7)
+  id              String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId          String       @map("user_id") @db.Uuid
+  groupId         String       @map("group_id") @db.Uuid
+  invitedById     String?      @map("invited_by") @db.Uuid
+  role            MemberRole[] @default([MEMBER])
+  createdAt       DateTime     @default(now()) @map("created_at")
+  notifications   Boolean?     @default(true)
+  defaultSplit    Float?       @map("default_split") @db.DoublePrecision
+  state           MemberState  @default(ACTIVE)
+  code            String?      @unique @db.VarChar(255)
+  color           String       @db.VarChar(7)
+  backgroundColor String       @map("background_color") @db.VarChar(7)
 
-  invitations   Member[]      @relation("MemberInvitations")
-  user          User          @relation(fields: [userId], references: [id])
-  group         Group         @relation(fields: [groupId], references: [id])
-  invitedBy     Member?       @relation("MemberInvitations", fields: [invitedById], references: [id])
-  payments      Payment[]     @relation("payments")
-  splits        Split[]       @relation("splits")
-  movements      Movement[]     @relation("movements")
-  transfersSent  Transfer[]     @relation("transfers_sent")
-  transfersReceived Transfer[]     @relation("transfers_received")
+  invitations      Member[]   @relation("MemberInvitations")
+  user             User       @relation(fields: [userId], references: [id])
+  group            Group      @relation(fields: [groupId], references: [id])
+  invitedBy        Member?    @relation("MemberInvitations", fields: [invitedById], references: [id])
+  payments         Payment[]  @relation("payments")
+  paymentsReceived Payment[]  @relation("payments_received")
+  splits           Split[]    @relation("splits")
+  expensesCreated  Movement[] @relation("expenses_created")
 
   @@map("members")
 }
@@ -87,84 +86,86 @@ model Movement {
   id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
   groupId     String   @map("group_id") @db.Uuid
   title       String   @db.VarChar(255)
-  imageUris    String[]  @map("image_uris")
+  imageUris   String[] @map("image_uris")
   date        DateTime
   createdAt   DateTime @default(now()) @map("created_at")
   createdById String   @map("created_by") @db.Uuid
 
-  createdBy        Member          @relation("movements", fields: [createdById], references: [id])
-  group            Group           @relation(fields: [groupId], references: [id])
-  payments         Payment[]       @relation("payments")
-  splits           Split[]         @relation("splits")
-  expenses       Expense[]       @relation("expenses")
-  transfers      Transfer[]      @relation("transfers")
+  createdBy           Member             @relation("expenses_created", fields: [createdById], references: [id])
+  group               Group              @relation(fields: [groupId], references: [id])
+  payments            Payment[]          @relation("payments")
+  splits              Split[]            @relation("splits")
+  amountsByCategories AmountByCategory[] @relation("amounts_by_categories")
 
   @@map("movements")
 }
 
 model Payment {
-  id        String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  memberId  String  @map("member_id") @db.Uuid
+  id         String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  memberId   String @map("member_id") @db.Uuid
   movementId String @map("movement_id") @db.Uuid
-  amount    Float   @db.DoublePrecision
+  amount     Float  @db.DoublePrecision
+  receiverId String? @map("receiver_id") @db.Uuid
 
-  member  Member   @relation("payments", fields: [memberId], references: [id])
+  member   Member   @relation("payments", fields: [memberId], references: [id])
+  receiver Member?   @relation("payments_received", fields: [receiverId], references: [id])
   movement Movement @relation("payments", fields: [movementId], references: [id])
 
   @@map("payments")
 }
 
 model Split {
-  id        String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  memberId  String  @map("member_id") @db.Uuid
-  movementId String  @map("movement_id") @db.Uuid
-  amount    Float   @db.DoublePrecision
+  id         String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  memberId   String @map("member_id") @db.Uuid
+  movementId String @map("movement_id") @db.Uuid
+  amount     Float  @db.DoublePrecision
 
-  member  Member  @relation("splits", fields: [memberId], references: [id])
+  member   Member   @relation("splits", fields: [memberId], references: [id])
   movement Movement @relation("splits", fields: [movementId], references: [id])
 
   @@map("splits")
 }
 
-model Expense {
-  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  movementId  String   @map("movement_id") @db.Uuid
-  categoryId String   @map("category_id") @db.Uuid
-  amount     Float    @db.DoublePrecision
-  description      String?  @db.VarChar(255)
+model AmountByCategory {
+  id          String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  movementId  String  @map("movement_id") @db.Uuid
+  categoryId  String  @map("category_id") @db.Uuid
+  amount      Float   @db.DoublePrecision
+  description String? @db.VarChar(255)
 
-  movement  Movement  @relation("expenses", fields: [movementId], references: [id], onDelete: Cascade)
-  category Category  @relation("expenses", fields: [categoryId], references: [id])
+  movement Movement @relation("amounts_by_categories", fields: [movementId], references: [id], onDelete: Cascade)
+  category Category @relation("amounts_by_categories", fields: [categoryId], references: [id])
 
-  @@map("expense_categories")
+  @@map("amounts_by_categories")
 }
+
+// model Transfer {
+//   id           String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+//   amount       Float   @db.DoublePrecision
+//   description  String? @db.VarChar(255)
+//   movementId   String  @unique @map("movement_id") @db.Uuid
+//   fromId String  @map("from_member_id") @db.Uuid
+//   toId   String  @map("to_member_id") @db.Uuid
+//   groupId String  @map("group_id") @db.Uuid
+
+//   from Member   @relation(fields: [fromId], references: [id], name: "transfers_sent")
+//   to   Member   @relation(fields: [toId], references: [id], name: "transfers_received")
+//   group Group   @relation(fields: [groupId], references: [id])
+
+//   @@map("transfers")
+// }
 
 model Category {
-  id      String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  groupId String         @map("group_id") @db.Uuid
-  name    String         @db.VarChar(255)
-  icon    String         @db.VarChar(255)
-  state   CategoryState  @default(ACTIVE) @map("state")
+  id      String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  groupId String        @map("group_id") @db.Uuid
+  name    String        @db.VarChar(255)
+  icon    String        @db.VarChar(255)
+  state   CategoryState @default(ACTIVE) @map("state")
 
-  group            Group            @relation(fields: [groupId], references: [id])
-  expenses        Expense[]        @relation("expenses")
+  group              Group              @relation(fields: [groupId], references: [id])
+  amountByCategories AmountByCategory[] @relation("amounts_by_categories")
 
   @@map("categories")
-}
-
-model Transfer {
-  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  amount      Float    @db.DoublePrecision
-  description String?  @db.VarChar(255)
-  movementId  String   @map("movement_id") @db.Uuid
-  fromMemberId String   @map("from_member_id") @db.Uuid
-  toMemberId  String   @map("to_member_id") @db.Uuid
-
-  fromMember Member  @relation(fields: [fromMemberId], references: [id], name: "transfers_sent")
-  toMember Member  @relation(fields: [toMemberId], references: [id], name: "transfers_received")
-  movement Movement @relation("transfers", fields: [movementId], references: [id])
-
-  @@map("transfers")
 }
 
 enum SplitType {

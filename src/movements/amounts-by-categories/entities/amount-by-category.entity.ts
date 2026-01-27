@@ -1,8 +1,8 @@
-import { Expense } from "prisma/generated/client";
+import { AmountByCategory } from "prisma/generated/client";
 import { CategoryEntity } from "src/categories/entities/category.entity";
 import { MovementEntity } from "src/movements/entities/movement.entity";
 
-export class ExpenseEntity implements Expense {
+export class AmountByCategoryEntity implements AmountByCategory {
   id: string;
   amount: number;
   description: string | null;
@@ -10,5 +10,5 @@ export class ExpenseEntity implements Expense {
   categoryId: string;
 
   movement?: MovementEntity;
-  category?: CategoryEntity;
+  category: CategoryEntity;
 }
